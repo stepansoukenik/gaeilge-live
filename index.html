@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=600, height=600, initial-scale=1.0, user-scalable=no">
+  <title>Gaeilge Live — Irish Translator</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Status Bar -->
+    <div id="status-bar">
+      <span id="direction-label">GA → EN</span>
+      <span id="mic-status" class="mic-off">🎙️ OFF</span>
+    </div>
+
+    <!-- Main Translation Display -->
+    <div id="translation-area">
+      <div id="source-text" class="text-panel">
+        <div class="panel-label">Listening...</div>
+        <div class="panel-content" id="source-content">Press ● to start</div>
+      </div>
+      <div id="divider"></div>
+      <div id="target-text" class="text-panel">
+        <div class="panel-label">Translation</div>
+        <div class="panel-content" id="target-content">—</div>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div id="controls">
+      <button class="focusable active" id="btn-listen" data-action="listen">
+        ● Listen
+      </button>
+      <button class="focusable" id="btn-swap" data-action="swap">
+        ⇄ Swap
+      </button>
+      <button class="focusable" id="btn-clear" data-action="clear">
+        ✕ Clear
+      </button>
+    </div>
+
+    <!-- Language indicator -->
+    <div id="lang-bar">
+      <span id="lang-source" class="lang-active">🇮🇪 Gaeilge</span>
+      <span id="lang-arrow">→</span>
+      <span id="lang-target">🇬🇧 English</span>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
