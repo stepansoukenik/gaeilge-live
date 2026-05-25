@@ -1,7 +1,7 @@
 # 🇮🇪 Gaeilge Live — Irish Translator for Meta Ray-Ban Display
 
 Real-time Irish ↔ English translation web app designed for Meta Ray-Ban Display glasses.
-Fills the gap where Irish (Gaeilge) is not natively supported in Live Translation.
+Built as a testing prototype. Irish (Gaeilge) is not natively supported in Live Translation yet.
 
 ## 🎯 What It Does
 
