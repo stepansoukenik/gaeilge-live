@@ -1,12 +1,3 @@
-
-app.js
-
-Page
-1
-/
-1
-100%
-"Data Classification" label was auto-applied to this file and set to "Internal - DSS-2"
 // Gaeilge Live — Phone ↔ Glasses Bridge v3
 // Phone mode: Web Speech API → falls back to MediaRecorder + Cloud Speech
 // Glasses mode: Polls session, displays on HUD
@@ -134,14 +125,24 @@ Page
     if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
       modeFocusIndex = 0;
       modeBtns.forEach((b, i) => b.classList.toggle("active", i === 0));
+      modeBtns[0].focus();
     } else if (event.key === "ArrowDown" || event.key === "ArrowRight") {
       modeFocusIndex = 1;
       modeBtns.forEach((b, i) => b.classList.toggle("active", i === 1));
-    } else if (event.key === "Enter" || event.key === " ") {
+      modeBtns[1].focus();
+    } else if (event.key === "Enter" || event.key === " " || event.key === "Return" || event.key === "Select") {
       event.preventDefault();
       selectMode(modeFocusIndex === 0 ? "phone" : "glasses");
     }
   }
+
+  // Also handle focus-based selection (glasses may use focus+click)
+  modeBtns.forEach((btn, i) => {
+    btn.addEventListener("focus", () => {
+      modeFocusIndex = i;
+      modeBtns.forEach((b, j) => b.classList.toggle("active", j === i));
+    });
+  });
 
   function handleNumpadKeys(event) {
     event.preventDefault();
