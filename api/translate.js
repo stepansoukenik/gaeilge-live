@@ -128,16 +128,15 @@ async function translateLingvanex(text, from, to) {
 // --- Google Cloud Translation API v2 ---
 async function translateGoogle(text, from, to) {
   const apiKey = process.env.GOOGLE_TRANSLATE_API_KEY;
-  const url = `https://translation.googleapis.com/language/translate/v2`;
+  const url = `https://translation.googleapis.com/language/translate/v2?key=${apiKey}`;
 
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       q: text,
-      source: from,  // "ga" or "en" — Google supports ISO 639-1
+      source: from,
       target: to,
-      key: apiKey,
       format: "text",
     }),
   });
