@@ -1,0 +1,14 @@
+{
+  "name": "gaeilge-live-translator",
+  "version": "1.0.0",
+  "description": "Real-time Irish ↔ English translator for Meta Ray-Ban Display",
+  "private": true,
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
+
