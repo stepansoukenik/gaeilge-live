@@ -1,110 +1,188 @@
-// api/translate.js — Vercel Serverless Function
-// Proxies translation requests to Lingvanex API (keeps API key secure)
+
+translate.js
+
+Page
+1
+/
+1
+100%
+"Data Classification" label was auto-applied to this file and set to "Internal - DSS-2"
+// api/translate.js — Improved Vercel Serverless Function
+// Supports: Lingvanex Cloud API, Google Cloud Translation, and LibreTranslate
+// Includes a test mode for debugging
 
 export default async function handler(req, res) {
-  // CORS headers for the glasses browser
+  // CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
+  if (req.method === "OPTIONS") return res.status(200).end();
+
+  // GET request = health check / test endpoint
+  if (req.method === "GET") {
+    return res.status(200).json({
+      status: "ok",
+      provider: getProvider(),
+      hasKey: !!getApiKey(),
+      timestamp: new Date().toISOString(),
+    });
   }
 
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { text, from, to } = req.body;
+  const { text, from, to } = req.body || {};
 
   if (!text || !from || !to) {
-    return res.status(400).json({ error: "Missing required fields: text, from, to" });
+    return res.status(400).json({ error: "Missing fields: text, from, to" });
   }
 
-  // Lingvanex language codes
+  const provider = getProvider();
+
+  try {
+    let translation;
+
+    switch (provider) {
+      case "lingvanex":
+        translation = await translateLingvanex(text, from, to);
+        break;
+      case "google":
+        translation = await translateGoogle(text, from, to);
+        break;
+      case "libretranslate":
+        translation = await translateLibre(text, from, to);
+        break;
+      default:
+        return res.status(500).json({
+          error: "No translation provider configured. Set LINGVANEX_API_KEY, GOOGLE_TRANSLATE_API_KEY, or LIBRETRANSLATE_URL in Vercel environment variables.",
+          help: "Visit your Vercel project → Settings → Environment Variables"
+        });
+    }
+
+    return res.status(200).json({ translation, source: text, from, to, provider });
+
+  } catch (error) {
+    console.error(`[${provider}] Translation error:`, error.message);
+    return res.status(500).json({
+      error: "Translation failed",
+      detail: error.message,
+      provider,
+    });
+  }
+}
+
+// --- Determine which provider to use ---
+function getProvider() {
+  if (process.env.LINGVANEX_API_KEY) return "lingvanex";
+  if (process.env.GOOGLE_TRANSLATE_API_KEY) return "google";
+  if (process.env.LIBRETRANSLATE_URL) return "libretranslate";
+  return "none";
+}
+
+function getApiKey() {
+  return process.env.LINGVANEX_API_KEY || process.env.GOOGLE_TRANSLATE_API_KEY || null;
+}
+
+// --- Lingvanex Cloud API ---
+async function translateLingvanex(text, from, to) {
+  const apiKey = process.env.LINGVANEX_API_KEY;
+
+  // Lingvanex uses full locale codes like "en_GB", "ga_IE"
   const langMap = {
-    "ga": "ga_IE",  // Irish
-    "en": "en_GB",  // English (British)
+    ga: "ga_IE",
+    en: "en_GB",
   };
 
   const sourceLang = langMap[from] || from;
   const targetLang = langMap[to] || to;
 
-  try {
-    // --- Option A: Lingvanex API ---
-    const apiKey = process.env.LINGVANEX_API_KEY;
+  // Lingvanex Cloud API endpoint (current as of 2025)
+  const response = await fetch("https://api-b2b.backenster.com/b1/api/v3/translate", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": apiKey,  // Note: some versions use just the key, not "Bearer key"
+    },
+    body: JSON.stringify({
+      from: sourceLang,
+      to: targetLang,
+      data: text,
+      platform: "api",
+    }),
+  });
 
-    if (!apiKey) {
-      // Fallback: use Google Cloud Translation if Lingvanex key not set
-      return await googleTranslateFallback(req, res, text, from, to);
-    }
+  const responseText = await response.text();
 
-    const response = await fetch("https://api-b2b.backenster.com/b1/api/v3/translate", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        from: sourceLang,
-        to: targetLang,
-        data: text,
-        platform: "api",
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error("Lingvanex error:", response.status, errText);
-      throw new Error(`Lingvanex API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const translation = data.result || data.translation || "";
-
-    return res.status(200).json({ translation, source: text, from, to });
-
-  } catch (error) {
-    console.error("Translation error:", error);
-    return res.status(500).json({ error: "Translation service unavailable" });
+  if (!response.ok) {
+    throw new Error(`Lingvanex HTTP ${response.status}: ${responseText}`);
   }
+
+  let data;
+  try {
+    data = JSON.parse(responseText);
+  } catch (e) {
+    throw new Error(`Lingvanex returned non-JSON: ${responseText.slice(0, 200)}`);
+  }
+
+  // Lingvanex returns { err: null, result: "translated text" }
+  if (data.err) {
+    throw new Error(`Lingvanex error: ${JSON.stringify(data.err)}`);
+  }
+
+  return data.result || data.translation || responseText;
 }
 
-// --- Fallback: Google Cloud Translation API ---
-async function googleTranslateFallback(req, res, text, from, to) {
-  const googleApiKey = process.env.GOOGLE_TRANSLATE_API_KEY;
+// --- Google Cloud Translation API v2 ---
+async function translateGoogle(text, from, to) {
+  const apiKey = process.env.GOOGLE_TRANSLATE_API_KEY;
+  const url = `https://translation.googleapis.com/language/translate/v2`;
 
-  if (!googleApiKey) {
-    return res.status(500).json({
-      error: "No translation API key configured. Set LINGVANEX_API_KEY or GOOGLE_TRANSLATE_API_KEY in Vercel environment variables."
-    });
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      q: text,
+      source: from,  // "ga" or "en" — Google supports ISO 639-1
+      target: to,
+      key: apiKey,
+      format: "text",
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Google HTTP ${response.status}: ${errText}`);
   }
 
-  try {
-    const url = `https://translation.googleapis.com/language/translate/v2?key=${googleApiKey}`;
-
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        q: text,
-        source: from === "ga" ? "ga" : "en",
-        target: to === "ga" ? "ga" : "en",
-        format: "text",
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Google Translate error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const translation = data.data.translations[0].translatedText;
-
-    return res.status(200).json({ translation, source: text, from, to });
-
-  } catch (error) {
-    console.error("Google Translate fallback error:", error);
-    return res.status(500).json({ error: "Translation service unavailable" });
-  }
+  const data = await response.json();
+  return data.data.translations[0].translatedText;
 }
+
+// --- LibreTranslate (self-hosted or free instance) ---
+async function translateLibre(text, from, to) {
+  const baseUrl = process.env.LIBRETRANSLATE_URL || "https://libretranslate.com";
+  const apiKey = process.env.LIBRETRANSLATE_API_KEY || "";
+
+  const response = await fetch(`${baseUrl}/translate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      q: text,
+      source: from,  // "ga" or "en"
+      target: to,
+      api_key: apiKey,
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`LibreTranslate HTTP ${response.status}: ${errText}`);
+  }
+
+  const data = await response.json();
+  return data.translatedText;
+}
+
+Displaying translate.js.
