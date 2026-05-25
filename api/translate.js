@@ -1,12 +1,3 @@
-
-translate.js
-
-Page
-1
-/
-1
-100%
-"Data Classification" label was auto-applied to this file and set to "Internal - DSS-2"
 // api/translate.js — Improved Vercel Serverless Function
 // Supports: Lingvanex Cloud API, Google Cloud Translation, and LibreTranslate
 // Includes a test mode for debugging
@@ -184,5 +175,3 @@ async function translateLibre(text, from, to) {
   const data = await response.json();
   return data.translatedText;
 }
-
-Displaying translate.js.
