@@ -1,31 +1,33 @@
-// Gaeilge Live — Phone ↔ Glasses Bridge v2
-// Now with D-pad navigable number pad for session code entry on glasses
+// Gaeilge Live — Phone ↔ Glasses Bridge v3
+// Phone mode: Web Speech API → falls back to MediaRecorder + Cloud Speech
+// Glasses mode: Polls session, displays on HUD
 
 (function() {
   "use strict";
 
   const CONFIG = {
     translateEndpoint: "/api/translate",
+    speechEndpoint: "/api/speech",
     sessionEndpoint: "/api/session",
     pollIntervalMs: 1500,
+    recordingDurationMs: 4000,
     maxDisplayChars: 120,
   };
 
   let state = {
     mode: null,
-    screen: "mode-select", // mode-select, numpad, phone, glasses
+    screen: "mode-select",
     sessionId: null,
     direction: "ga-en",
     isListening: false,
     focusIndex: 0,
     lastTimestamp: 0,
     pollTimer: null,
-    // Numpad state
     numpadDigits: [],
-    numpadFocusIndex: 4, // Start focused on "5" (middle of grid)
+    numpadFocusIndex: 4,
+    useMediaRecorder: false,
   };
 
-  // --- Generate 4-digit session code ---
   function generateSessionId() {
     return String(Math.floor(1000 + Math.random() * 9000));
   }
@@ -51,7 +53,6 @@
       showScreen("phone");
       initPhone();
     } else {
-      // Show numpad for code entry
       state.numpadDigits = [];
       state.numpadFocusIndex = 4;
       updateNumpadDisplay();
@@ -60,13 +61,12 @@
     }
   }
 
-  // Click support for mode buttons
   modeBtns.forEach(btn => {
     btn.addEventListener("click", () => selectMode(btn.dataset.mode));
   });
 
   // ===========================
-  // NUMPAD (Glasses code entry)
+  // NUMPAD
   // ===========================
   const numpadKeys = document.querySelectorAll(".numpad-key");
 
@@ -79,9 +79,7 @@
   }
 
   function updateNumpadFocus() {
-    numpadKeys.forEach((key, i) => {
-      key.classList.toggle("active", i === state.numpadFocusIndex);
-    });
+    numpadKeys.forEach((key, i) => key.classList.toggle("active", i === state.numpadFocusIndex));
   }
 
   function numpadPress(digit) {
@@ -98,8 +96,6 @@
       state.numpadDigits.push(digit);
     }
     updateNumpadDisplay();
-
-    // Auto-connect when 4 digits entered
     if (state.numpadDigits.length === 4 && digit !== "ok" && digit !== "del") {
       setTimeout(() => {
         state.sessionId = state.numpadDigits.join("");
@@ -110,26 +106,18 @@
     }
   }
 
-  // Click support for numpad
   numpadKeys.forEach(key => {
     key.addEventListener("click", () => numpadPress(key.dataset.digit));
   });
 
   // ===========================
-  // GLOBAL KEYBOARD HANDLER
+  // KEYBOARD HANDLER
   // ===========================
   document.addEventListener("keydown", (event) => {
     switch (state.screen) {
-      case "mode-select":
-        handleModeKeys(event);
-        break;
-      case "numpad":
-        handleNumpadKeys(event);
-        break;
-      case "phone":
-        handlePhoneKeys(event);
-        break;
-      // glasses mode has no interaction needed
+      case "mode-select": handleModeKeys(event); break;
+      case "numpad": handleNumpadKeys(event); break;
+      case "phone": handlePhoneKeys(event); break;
     }
   });
 
@@ -148,34 +136,19 @@
 
   function handleNumpadKeys(event) {
     event.preventDefault();
-    const cols = 3;
-    const total = numpadKeys.length; // 12
-
+    const cols = 3, total = numpadKeys.length;
     switch (event.key) {
-      case "ArrowRight":
-        state.numpadFocusIndex = Math.min(total - 1, state.numpadFocusIndex + 1);
-        break;
-      case "ArrowLeft":
-        state.numpadFocusIndex = Math.max(0, state.numpadFocusIndex - 1);
-        break;
-      case "ArrowDown":
-        if (state.numpadFocusIndex + cols < total)
-          state.numpadFocusIndex += cols;
-        break;
-      case "ArrowUp":
-        if (state.numpadFocusIndex - cols >= 0)
-          state.numpadFocusIndex -= cols;
-        break;
-      case "Enter":
-      case " ":
-        numpadPress(numpadKeys[state.numpadFocusIndex].dataset.digit);
-        break;
+      case "ArrowRight": state.numpadFocusIndex = Math.min(total - 1, state.numpadFocusIndex + 1); break;
+      case "ArrowLeft": state.numpadFocusIndex = Math.max(0, state.numpadFocusIndex - 1); break;
+      case "ArrowDown": if (state.numpadFocusIndex + cols < total) state.numpadFocusIndex += cols; break;
+      case "ArrowUp": if (state.numpadFocusIndex - cols >= 0) state.numpadFocusIndex -= cols; break;
+      case "Enter": case " ": numpadPress(numpadKeys[state.numpadFocusIndex].dataset.digit); break;
     }
     updateNumpadFocus();
   }
 
   // ===========================
-  // PHONE MODE
+  // PHONE MODE (with MediaRecorder fallback)
   // ===========================
   function initPhone() {
     const els = {
@@ -189,11 +162,13 @@
     };
     const focusables = document.querySelectorAll("#phone-mode .focusable");
     state.focusIndex = 0;
-    focusables[0].classList.add("active");
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition = null;
+    let audioStream = null;
+    let mediaRecorder = null;
 
+    // Try Web Speech API
     if (SpeechRecognition) {
       recognition = new SpeechRecognition();
       recognition.continuous = true;
@@ -211,15 +186,87 @@
       };
 
       recognition.onerror = (event) => {
-        els.sourceContent.textContent = "Error: " + event.error;
-        stopListening();
+        console.warn("Web Speech failed:", event.error);
+        // Fall back to MediaRecorder
+        if (event.error === "service-not-allowed" || event.error === "not-allowed" ||
+            event.error === "network" || event.error === "language-not-supported") {
+          state.useMediaRecorder = true;
+          if (state.isListening) {
+            startMediaRecorder();
+          }
+        } else {
+          els.sourceContent.textContent = "Error: " + event.error;
+          stopListening();
+        }
       };
 
       recognition.onend = () => {
-        if (state.isListening) try { recognition.start(); } catch(e) {}
+        if (state.isListening && !state.useMediaRecorder) {
+          try { recognition.start(); } catch(e) {}
+        }
       };
+    } else {
+      state.useMediaRecorder = true;
     }
 
+    // --- MediaRecorder approach ---
+    async function startMediaRecorder() {
+      try {
+        audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (err) {
+        els.sourceContent.textContent = "Mic denied — check permissions";
+        stopListening();
+        return;
+      }
+      els.sourceContent.textContent = "Listening…";
+      recordNextChunk();
+    }
+
+    function recordNextChunk() {
+      if (!state.isListening || !audioStream) return;
+
+      const chunks = [];
+      mediaRecorder = new MediaRecorder(audioStream, { mimeType: getSupportedMimeType() });
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        if (chunks.length === 0 || !state.isListening) return;
+        const blob = new Blob(chunks, { type: mediaRecorder.mimeType });
+        const base64 = await blobToBase64(blob);
+
+        els.sourceContent.textContent = "Processing…";
+        try {
+          const langCode = state.direction === "ga-en" ? "ga-IE" : "en-US";
+          const resp = await fetch(CONFIG.speechEndpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ audio: base64, language: langCode }),
+          });
+          if (!resp.ok) throw new Error("Speech API error");
+          const data = await resp.json();
+          if (data.transcript && data.transcript.trim()) {
+            els.sourceContent.textContent = truncate(data.transcript);
+            translateAndPush(data.transcript);
+          } else {
+            els.sourceContent.textContent = "No speech detected — try again";
+          }
+        } catch (err) {
+          els.sourceContent.textContent = "⚠ Recognition failed";
+        }
+        // Next chunk
+        if (state.isListening) setTimeout(recordNextChunk, 500);
+      };
+
+      mediaRecorder.start();
+      setTimeout(() => {
+        if (mediaRecorder && mediaRecorder.state === "recording") mediaRecorder.stop();
+      }, CONFIG.recordingDurationMs);
+    }
+
+    // --- Translate + push to glasses ---
     async function translateAndPush(text) {
       els.targetContent.textContent = "…";
       try {
@@ -232,8 +279,7 @@
         if (!resp.ok) throw new Error("Failed");
         const data = await resp.json();
         els.targetContent.textContent = truncate(data.translation || "");
-
-        // Push to glasses
+        // Push to glasses session
         await fetch(CONFIG.sessionEndpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -245,19 +291,24 @@
           }),
         });
       } catch (err) {
-        els.targetContent.textContent = "⚠ Error";
+        els.targetContent.textContent = "⚠ Translation error";
       }
     }
 
+    // --- Start/Stop ---
     function startListening() {
-      if (!recognition) { els.sourceContent.textContent = "Speech not supported"; return; }
       state.isListening = true;
       els.micStatus.textContent = "🎙️ ON";
       els.micStatus.className = "mic-on";
       els.sourceContent.textContent = "Listening…";
       els.btnListen.textContent = "■ Stop";
-      recognition.lang = state.direction === "ga-en" ? "ga-IE" : "en-US";
-      try { recognition.start(); } catch(e) {}
+
+      if (!state.useMediaRecorder && recognition) {
+        recognition.lang = state.direction === "ga-en" ? "ga-IE" : "en-US";
+        try { recognition.start(); } catch(e) { startMediaRecorder(); }
+      } else {
+        startMediaRecorder();
+      }
     }
 
     function stopListening() {
@@ -265,7 +316,9 @@
       els.micStatus.textContent = "🎙️ OFF";
       els.micStatus.className = "mic-off";
       els.btnListen.textContent = "● Listen";
-      if (recognition) try { recognition.stop(); } catch(e) {}
+      if (recognition && !state.useMediaRecorder) try { recognition.stop(); } catch(e) {}
+      if (mediaRecorder && mediaRecorder.state === "recording") mediaRecorder.stop();
+      if (audioStream) { audioStream.getTracks().forEach(t => t.stop()); audioStream = null; }
     }
 
     function swapLanguages() {
@@ -284,14 +337,11 @@
       els.targetContent.textContent = "—";
     }
 
+    // D-pad
     window.handlePhoneKeys = function(event) {
       switch (event.key) {
-        case "ArrowLeft":
-          state.focusIndex = Math.max(0, state.focusIndex - 1);
-          break;
-        case "ArrowRight":
-          state.focusIndex = Math.min(focusables.length - 1, state.focusIndex + 1);
-          break;
+        case "ArrowLeft": state.focusIndex = Math.max(0, state.focusIndex - 1); break;
+        case "ArrowRight": state.focusIndex = Math.min(focusables.length - 1, state.focusIndex + 1); break;
         case "Enter": case " ":
           event.preventDefault();
           const action = focusables[state.focusIndex].dataset.action;
@@ -335,6 +385,22 @@
   // --- Utilities ---
   function truncate(text) {
     return text.length <= CONFIG.maxDisplayChars ? text : text.slice(0, CONFIG.maxDisplayChars) + "…";
+  }
+
+  function getSupportedMimeType() {
+    const types = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"];
+    for (const type of types) {
+      if (MediaRecorder.isTypeSupported(type)) return type;
+    }
+    return "audio/webm";
+  }
+
+  async function blobToBase64(blob) {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result.split(",")[1]);
+      reader.readAsDataURL(blob);
+    });
   }
 
 })();
