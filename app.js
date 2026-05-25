@@ -1,3 +1,12 @@
+
+app.js
+
+Page
+1
+/
+1
+100%
+"Data Classification" label was auto-applied to this file and set to "Internal - DSS-2"
 // Gaeilge Live — Phone ↔ Glasses Bridge v3
 // Phone mode: Web Speech API → falls back to MediaRecorder + Cloud Speech
 // Glasses mode: Polls session, displays on HUD
@@ -377,6 +386,15 @@
           srcEl.textContent = truncate(data.source || "");
           tgtEl.textContent = truncate(data.translation || "—");
           dirEl.textContent = data.direction === "ga-en" ? "GA → EN" : "EN → GA";
+          // Speak the translation aloud through glasses speakers
+          if (data.translation && window.speechSynthesis) {
+            const utterance = new SpeechSynthesisUtterance(data.translation);
+            utterance.lang = data.direction === "ga-en" ? "en-GB" : "ga-IE";
+            utterance.rate = 0.9;
+            utterance.volume = 1.0;
+            speechSynthesis.cancel(); // Stop any previous speech
+            speechSynthesis.speak(utterance);
+          }
         }
       } catch (err) {}
     }, CONFIG.pollIntervalMs);
