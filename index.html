@@ -8,43 +8,69 @@
 </head>
 <body>
   <div id="app">
-    <!-- Status Bar -->
-    <div id="status-bar">
-      <span id="direction-label">GA → EN</span>
-      <span id="mic-status" class="mic-off">🎙️ OFF</span>
+    <!-- Mode Selector (shown on first load) -->
+    <div id="mode-select">
+      <div class="mode-title">Gaeilge Live</div>
+      <div class="mode-subtitle">Choose device mode</div>
+      <button class="focusable mode-btn active" id="btn-phone" data-mode="phone">
+        📱 Phone (mic + send)
+      </button>
+      <button class="focusable mode-btn" id="btn-glasses" data-mode="glasses">
+        🕶️ Glasses (display)
+      </button>
+      <div class="mode-hint">Session code connects both devices</div>
     </div>
 
-    <!-- Main Translation Display -->
-    <div id="translation-area">
-      <div id="source-text" class="text-panel">
-        <div class="panel-label">Listening...</div>
-        <div class="panel-content" id="source-content">Press ● to start</div>
+    <!-- Phone Mode -->
+    <div id="phone-mode" class="hidden">
+      <div id="status-bar">
+        <span id="direction-label">GA → EN</span>
+        <span id="session-code-display">----</span>
+        <span id="mic-status" class="mic-off">🎙️ OFF</span>
       </div>
-      <div id="divider"></div>
-      <div id="target-text" class="text-panel">
-        <div class="panel-label">Translation</div>
-        <div class="panel-content" id="target-content">—</div>
+      <div id="translation-area">
+        <div id="source-text" class="text-panel">
+          <div class="panel-label">Listening...</div>
+          <div class="panel-content" id="source-content">Press ● to start</div>
+        </div>
+        <div id="divider"></div>
+        <div id="target-text" class="text-panel">
+          <div class="panel-label">Translation</div>
+          <div class="panel-content" id="target-content">—</div>
+        </div>
+      </div>
+      <div id="controls">
+        <button class="focusable active" id="btn-listen" data-action="listen">● Listen</button>
+        <button class="focusable" id="btn-swap" data-action="swap">⇄ Swap</button>
+        <button class="focusable" id="btn-clear" data-action="clear">✕ Clear</button>
+      </div>
+      <div id="lang-bar">
+        <span id="lang-source" class="lang-active">🇮🇪 Gaeilge</span>
+        <span id="lang-arrow">→</span>
+        <span id="lang-target">🇬🇧 English</span>
       </div>
     </div>
 
-    <!-- Controls -->
-    <div id="controls">
-      <button class="focusable active" id="btn-listen" data-action="listen">
-        ● Listen
-      </button>
-      <button class="focusable" id="btn-swap" data-action="swap">
-        ⇄ Swap
-      </button>
-      <button class="focusable" id="btn-clear" data-action="clear">
-        ✕ Clear
-      </button>
-    </div>
-
-    <!-- Language indicator -->
-    <div id="lang-bar">
-      <span id="lang-source" class="lang-active">🇮🇪 Gaeilge</span>
-      <span id="lang-arrow">→</span>
-      <span id="lang-target">🇬🇧 English</span>
+    <!-- Glasses Mode (display only) -->
+    <div id="glasses-mode" class="hidden">
+      <div id="glasses-status-bar">
+        <span id="glasses-direction">GA → EN</span>
+        <span id="glasses-session">----</span>
+      </div>
+      <div id="glasses-display">
+        <div id="glasses-source" class="glasses-panel">
+          <div class="panel-label">Source</div>
+          <div class="panel-content" id="glasses-source-text">Waiting for phone…</div>
+        </div>
+        <div id="glasses-divider"></div>
+        <div id="glasses-target" class="glasses-panel">
+          <div class="panel-label">Translation</div>
+          <div class="panel-content glasses-translation" id="glasses-target-text">—</div>
+        </div>
+      </div>
+      <div id="glasses-footer">
+        <span class="glasses-hint">Connected to phone</span>
+      </div>
     </div>
   </div>
 
