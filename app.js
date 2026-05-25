@@ -243,7 +243,7 @@
           const resp = await fetch(CONFIG.speechEndpoint, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ audio: base64, language: langCode }),
+            body: JSON.stringify({ audio: base64, language: langCode, mimeType: mediaRecorder.mimeType }),
           });
           if (!resp.ok) throw new Error("Speech API error");
           const data = await resp.json();
