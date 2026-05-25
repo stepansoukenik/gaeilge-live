@@ -3,15 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=600, height=600, initial-scale=1.0, user-scalable=no">
-  <title>Gaeilge Live — Irish Translator</title>
+  <meta name="theme-color" content="#1B5E20">
+  <title>Gaeilge Live</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="/icon-96.png" sizes="96x96" type="image/png">
+  <link rel="apple-touch-icon" href="/icon-192.png" sizes="192x192">
+  <link rel="manifest" href="/manifest.webmanifest">
 </head>
 <body>
   <div id="app">
-    <!-- Mode Selector (shown on first load) -->
+    <!-- Mode Selector -->
     <div id="mode-select">
       <div class="mode-title">Gaeilge Live</div>
-      <div class="mode-subtitle">Choose device mode</div>
+      <div class="mode-subtitle">Irish ↔ English Translator</div>
       <button class="focusable mode-btn active" id="btn-phone" data-mode="phone">
         📱 Phone (mic + send)
       </button>
@@ -19,6 +23,31 @@
         🕶️ Glasses (display)
       </button>
       <div class="mode-hint">Session code connects both devices</div>
+    </div>
+
+    <!-- Number Pad for Glasses -->
+    <div id="numpad-screen" class="hidden">
+      <div class="numpad-title">Enter session code</div>
+      <div id="numpad-display">
+        <span class="digit-slot" id="d0">_</span>
+        <span class="digit-slot" id="d1">_</span>
+        <span class="digit-slot" id="d2">_</span>
+        <span class="digit-slot" id="d3">_</span>
+      </div>
+      <div id="numpad-grid">
+        <button class="focusable numpad-key" data-digit="1">1</button>
+        <button class="focusable numpad-key" data-digit="2">2</button>
+        <button class="focusable numpad-key" data-digit="3">3</button>
+        <button class="focusable numpad-key" data-digit="4">4</button>
+        <button class="focusable numpad-key" data-digit="5">5</button>
+        <button class="focusable numpad-key" data-digit="6">6</button>
+        <button class="focusable numpad-key" data-digit="7">7</button>
+        <button class="focusable numpad-key" data-digit="8">8</button>
+        <button class="focusable numpad-key" data-digit="9">9</button>
+        <button class="focusable numpad-key numpad-del" data-digit="del">←</button>
+        <button class="focusable numpad-key" data-digit="0">0</button>
+        <button class="focusable numpad-key numpad-ok" data-digit="ok">✓</button>
+      </div>
     </div>
 
     <!-- Phone Mode -->
@@ -30,7 +59,7 @@
       </div>
       <div id="translation-area">
         <div id="source-text" class="text-panel">
-          <div class="panel-label">Listening...</div>
+          <div class="panel-label">Listening</div>
           <div class="panel-content" id="source-content">Press ● to start</div>
         </div>
         <div id="divider"></div>
@@ -51,7 +80,7 @@
       </div>
     </div>
 
-    <!-- Glasses Mode (display only) -->
+    <!-- Glasses Mode -->
     <div id="glasses-mode" class="hidden">
       <div id="glasses-status-bar">
         <span id="glasses-direction">GA → EN</span>
@@ -69,7 +98,7 @@
         </div>
       </div>
       <div id="glasses-footer">
-        <span class="glasses-hint">Connected to phone</span>
+        <span class="glasses-hint">● Connected to phone</span>
       </div>
     </div>
   </div>
