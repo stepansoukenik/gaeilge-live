@@ -1,344 +1,266 @@
-// Gaeilge Live — Irish ↔ English Real-Time Translator
-// For Meta Ray-Ban Display glasses
-// Uses MediaRecorder + Cloud Speech-to-Text (glasses) or Web Speech API (desktop)
+// Gaeilge Live — Phone ↔ Glasses Bridge
+// Phone: captures speech, translates, pushes to session
+// Glasses: polls session, displays translation on HUD
 
 (function() {
   "use strict";
 
-  // --- Configuration ---
   const CONFIG = {
     translateEndpoint: "/api/translate",
-    speechEndpoint: "/api/speech",
-    recordingDurationMs: 4000,   // Record 4-second chunks
+    sessionEndpoint: "/api/session",
+    pollIntervalMs: 1500,
     maxDisplayChars: 120,
   };
 
-  // --- State ---
   let state = {
+    mode: null,        // "phone" or "glasses"
+    sessionId: null,
     direction: "ga-en",
     isListening: false,
     focusIndex: 0,
-    useWebSpeech: false, // Will be set to true if Web Speech API works
+    lastTimestamp: 0,
+    pollTimer: null,
   };
 
-  // --- DOM Elements ---
-  const els = {
-    directionLabel: document.getElementById("direction-label"),
-    micStatus: document.getElementById("mic-status"),
-    sourceContent: document.getElementById("source-content"),
-    targetContent: document.getElementById("target-content"),
-    btnListen: document.getElementById("btn-listen"),
-    btnSwap: document.getElementById("btn-swap"),
-    btnClear: document.getElementById("btn-clear"),
-    langSource: document.getElementById("lang-source"),
-    langTarget: document.getElementById("lang-target"),
-    app: document.getElementById("app"),
-  };
-
-  const focusables = document.querySelectorAll(".focusable");
-
-  // --- Detect capabilities ---
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  let recognition = null;
-  let mediaRecorder = null;
-  let audioStream = null;
-  let recordingLoop = null;
-
-  // Try Web Speech API first (works on desktop Chrome)
-  if (SpeechRecognition) {
-    recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-
-    recognition.onresult = (event) => {
-      let interim = "";
-      let final = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          final += transcript;
-        } else {
-          interim += transcript;
-        }
-      }
-      els.sourceContent.textContent = truncate(final || interim);
-      if (final) {
-        translate(final);
-      }
-    };
-
-    recognition.onerror = (event) => {
-      console.warn("Web Speech API failed:", event.error);
-      // Fall back to MediaRecorder approach
-      if (event.error === "service-not-allowed" || event.error === "not-allowed" ||
-          event.error === "network" || event.error === "aborted") {
-        state.useWebSpeech = false;
-        if (state.isListening) {
-          stopListening();
-          // Auto-restart with MediaRecorder
-          startListeningMediaRecorder();
-        }
-      }
-    };
-
-    recognition.onend = () => {
-      if (state.isListening && state.useWebSpeech) {
-        try { recognition.start(); } catch(e) {}
-      }
-    };
+  // --- Generate 4-digit session code ---
+  function generateSessionId() {
+    return String(Math.floor(1000 + Math.random() * 9000));
   }
 
-  // --- MediaRecorder approach (works on glasses) ---
-  async function startListeningMediaRecorder() {
-    try {
-      audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch (err) {
-      els.sourceContent.textContent = "Mic access denied";
-      stopListening();
-      return;
-    }
+  // --- Mode Selection ---
+  const modeSelect = document.getElementById("mode-select");
+  const phoneMode = document.getElementById("phone-mode");
+  const glassesMode = document.getElementById("glasses-mode");
+  const modeBtns = modeSelect.querySelectorAll(".mode-btn");
+  let modeFocusIndex = 0;
 
-    state.isListening = true;
-    state.useWebSpeech = false;
-    updateListeningUI(true);
-    els.sourceContent.textContent = "Listening…";
+  function selectMode(mode) {
+    state.mode = mode;
+    state.sessionId = generateSessionId();
+    modeSelect.classList.add("hidden");
 
-    recordNextChunk();
-  }
-
-  function recordNextChunk() {
-    if (!state.isListening || !audioStream) return;
-
-    const chunks = [];
-    mediaRecorder = new MediaRecorder(audioStream, {
-      mimeType: getSupportedMimeType(),
-    });
-
-    mediaRecorder.ondataavailable = (e) => {
-      if (e.data.size > 0) chunks.push(e.data);
-    };
-
-    mediaRecorder.onstop = async () => {
-      if (chunks.length === 0 || !state.isListening) return;
-
-      const blob = new Blob(chunks, { type: mediaRecorder.mimeType });
-      const base64 = await blobToBase64(blob);
-
-      // Send to cloud speech-to-text
-      els.sourceContent.textContent = "Processing…";
-      try {
-        const langCode = state.direction === "ga-en" ? "ga-IE" : "en-US";
-        const resp = await fetch(CONFIG.speechEndpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ audio: base64, language: langCode }),
-        });
-
-        if (!resp.ok) throw new Error("Speech API error");
-
-        const data = await resp.json();
-        if (data.transcript && data.transcript.trim()) {
-          els.sourceContent.textContent = truncate(data.transcript);
-          translate(data.transcript);
-        } else {
-          els.sourceContent.textContent = "No speech detected";
-        }
-      } catch (err) {
-        console.error("Speech recognition error:", err);
-        els.sourceContent.textContent = "⚠ Recognition failed";
-      }
-
-      // Record next chunk
-      if (state.isListening) {
-        setTimeout(recordNextChunk, 500);
-      }
-    };
-
-    mediaRecorder.start();
-    setTimeout(() => {
-      if (mediaRecorder && mediaRecorder.state === "recording") {
-        mediaRecorder.stop();
-      }
-    }, CONFIG.recordingDurationMs);
-  }
-
-  // --- Translation ---
-  async function translate(text) {
-    if (!text.trim()) return;
-
-    els.app.classList.add("translating");
-    els.targetContent.textContent = "…";
-
-    try {
-      const [from, to] = state.direction === "ga-en" ? ["ga", "en"] : ["en", "ga"];
-      const response = await fetch(CONFIG.translateEndpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: text.trim(), from, to }),
-      });
-
-      if (!response.ok) throw new Error(`API error: ${response.status}`);
-
-      const data = await response.json();
-      els.targetContent.textContent = truncate(data.translation || "No translation");
-
-    } catch (err) {
-      console.error("Translation error:", err);
-      els.targetContent.textContent = "⚠ Translation failed";
-      els.app.classList.add("error");
-      setTimeout(() => els.app.classList.remove("error"), 2000);
-    }
-    els.app.classList.remove("translating");
-  }
-
-  // --- Actions ---
-  function startListening() {
-    // Try Web Speech API first (desktop)
-    if (recognition) {
-      state.useWebSpeech = true;
-      state.isListening = true;
-      updateListeningUI(true);
-      els.sourceContent.textContent = "Listening…";
-      recognition.lang = state.direction === "ga-en" ? "ga-IE" : "en-US";
-      try {
-        recognition.start();
-      } catch(e) {
-        // If Web Speech fails immediately, use MediaRecorder
-        startListeningMediaRecorder();
-      }
+    if (mode === "phone") {
+      phoneMode.classList.remove("hidden");
+      document.getElementById("session-code-display").textContent = state.sessionId;
+      initPhone();
     } else {
-      // No Web Speech API — go straight to MediaRecorder
-      startListeningMediaRecorder();
+      glassesMode.classList.remove("hidden");
+      // Prompt for session code (use same as phone shows)
+      const code = prompt("Enter 4-digit code from phone:");
+      if (code && code.length === 4) {
+        state.sessionId = code;
+      }
+      document.getElementById("glasses-session").textContent = state.sessionId;
+      initGlasses();
     }
   }
 
-  function stopListening() {
-    state.isListening = false;
-    updateListeningUI(false);
-
-    if (recognition && state.useWebSpeech) {
-      try { recognition.stop(); } catch(e) {}
-    }
-    if (mediaRecorder && mediaRecorder.state === "recording") {
-      mediaRecorder.stop();
-    }
-    if (audioStream) {
-      audioStream.getTracks().forEach(t => t.stop());
-      audioStream = null;
-    }
-  }
-
-  function toggleListening() {
-    state.isListening ? stopListening() : startListening();
-  }
-
-  function swapLanguages() {
-    stopListening();
-    state.direction = state.direction === "ga-en" ? "en-ga" : "ga-en";
-    updateDirectionUI();
-    els.sourceContent.textContent = "Press ● to start";
-    els.targetContent.textContent = "—";
-  }
-
-  function clearAll() {
-    stopListening();
-    els.sourceContent.textContent = "Press ● to start";
-    els.targetContent.textContent = "—";
-    els.app.classList.remove("error", "translating");
-  }
-
-  // --- UI Updates ---
-  function updateListeningUI(listening) {
-    els.micStatus.textContent = listening ? "🎙️ ON" : "🎙️ OFF";
-    els.micStatus.className = listening ? "mic-on" : "mic-off";
-    els.btnListen.textContent = listening ? "■ Stop" : "● Listen";
-    els.app.classList.toggle("listening", listening);
-  }
-
-  function updateDirectionUI() {
-    if (state.direction === "ga-en") {
-      els.directionLabel.textContent = "GA → EN";
-      els.langSource.textContent = "🇮🇪 Gaeilge";
-      els.langTarget.textContent = "🇬🇧 English";
-    } else {
-      els.directionLabel.textContent = "EN → GA";
-      els.langSource.textContent = "🇬🇧 English";
-      els.langTarget.textContent = "🇮🇪 Gaeilge";
-    }
-  }
-
-  // --- D-pad Navigation ---
-  function updateFocus() {
-    focusables.forEach((el, i) => {
-      el.classList.toggle("active", i === state.focusIndex);
-      if (i === state.focusIndex) el.focus();
-    });
-  }
-
+  // Mode selector D-pad navigation
   document.addEventListener("keydown", (event) => {
-    switch (event.key) {
-      case "ArrowLeft":
-        event.preventDefault();
-        state.focusIndex = Math.max(0, state.focusIndex - 1);
-        updateFocus();
-        break;
-      case "ArrowRight":
-        event.preventDefault();
-        state.focusIndex = Math.min(focusables.length - 1, state.focusIndex + 1);
-        updateFocus();
-        break;
-      case "Enter":
-      case " ":
-        event.preventDefault();
-        activateFocused();
-        break;
+    if (state.mode === null) {
+      // Mode selection screen
+      if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+        modeFocusIndex = 0;
+        updateModeFocus();
+      } else if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+        modeFocusIndex = 1;
+        updateModeFocus();
+      } else if (event.key === "Enter" || event.key === " ") {
+        selectMode(modeFocusIndex === 0 ? "phone" : "glasses");
+      }
+    } else if (state.mode === "phone") {
+      handlePhoneKeydown(event);
     }
   });
 
-  function activateFocused() {
-    const action = focusables[state.focusIndex].dataset.action;
-    switch (action) {
-      case "listen": toggleListening(); break;
-      case "swap":   swapLanguages(); break;
-      case "clear":  clearAll(); break;
+  function updateModeFocus() {
+    modeBtns.forEach((btn, i) => btn.classList.toggle("active", i === modeFocusIndex));
+  }
+
+  // Click support
+  modeBtns.forEach((btn, i) => {
+    btn.addEventListener("click", () => selectMode(btn.dataset.mode));
+  });
+
+  // ===========================
+  // PHONE MODE
+  // ===========================
+  function initPhone() {
+    const els = {
+      directionLabel: document.getElementById("direction-label"),
+      micStatus: document.getElementById("mic-status"),
+      sourceContent: document.getElementById("source-content"),
+      targetContent: document.getElementById("target-content"),
+      btnListen: document.getElementById("btn-listen"),
+      langSource: document.getElementById("lang-source"),
+      langTarget: document.getElementById("lang-target"),
+      app: document.getElementById("app"),
+    };
+    const focusables = phoneMode.querySelectorAll(".focusable");
+
+    // Web Speech API (works on phone browsers)
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition = null;
+
+    if (SpeechRecognition) {
+      recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+
+      recognition.onresult = (event) => {
+        let final = "";
+        let interim = "";
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const t = event.results[i][0].transcript;
+          if (event.results[i].isFinal) final += t;
+          else interim += t;
+        }
+        els.sourceContent.textContent = truncate(final || interim);
+        if (final) translateAndPush(final);
+      };
+
+      recognition.onerror = (event) => {
+        els.sourceContent.textContent = "Error: " + event.error;
+        stopListening();
+      };
+
+      recognition.onend = () => {
+        if (state.isListening) {
+          try { recognition.start(); } catch(e) {}
+        }
+      };
     }
+
+    async function translateAndPush(text) {
+      els.targetContent.textContent = "…";
+      try {
+        const [from, to] = state.direction === "ga-en" ? ["ga", "en"] : ["en", "ga"];
+        const resp = await fetch(CONFIG.translateEndpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, from, to }),
+        });
+        if (!resp.ok) throw new Error("Translation failed");
+        const data = await resp.json();
+        const translation = data.translation || "";
+        els.targetContent.textContent = truncate(translation);
+
+        // Push to session for glasses
+        await fetch(CONFIG.sessionEndpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: state.sessionId,
+            source: text,
+            translation,
+            direction: state.direction,
+          }),
+        });
+      } catch (err) {
+        els.targetContent.textContent = "⚠ Error";
+      }
+    }
+
+    function startListening() {
+      if (!recognition) {
+        els.sourceContent.textContent = "Speech not supported";
+        return;
+      }
+      state.isListening = true;
+      els.micStatus.textContent = "🎙️ ON";
+      els.micStatus.className = "mic-on";
+      els.sourceContent.textContent = "Listening…";
+      els.btnListen.textContent = "■ Stop";
+      recognition.lang = state.direction === "ga-en" ? "ga-IE" : "en-US";
+      try { recognition.start(); } catch(e) {}
+    }
+
+    function stopListening() {
+      state.isListening = false;
+      els.micStatus.textContent = "🎙️ OFF";
+      els.micStatus.className = "mic-off";
+      els.btnListen.textContent = "● Listen";
+      if (recognition) try { recognition.stop(); } catch(e) {}
+    }
+
+    function swapLanguages() {
+      stopListening();
+      state.direction = state.direction === "ga-en" ? "en-ga" : "ga-en";
+      els.directionLabel.textContent = state.direction === "ga-en" ? "GA → EN" : "EN → GA";
+      els.langSource.textContent = state.direction === "ga-en" ? "🇮🇪 Gaeilge" : "🇬🇧 English";
+      els.langTarget.textContent = state.direction === "ga-en" ? "🇬🇧 English" : "🇮🇪 Gaeilge";
+      els.sourceContent.textContent = "Press ● to start";
+      els.targetContent.textContent = "—";
+    }
+
+    function clearAll() {
+      stopListening();
+      els.sourceContent.textContent = "Press ● to start";
+      els.targetContent.textContent = "—";
+    }
+
+    // D-pad
+    window.handlePhoneKeydown = function(event) {
+      const focusables = phoneMode.querySelectorAll(".focusable");
+      switch (event.key) {
+        case "ArrowLeft":
+          state.focusIndex = Math.max(0, state.focusIndex - 1);
+          updatePhoneFocus(focusables);
+          break;
+        case "ArrowRight":
+          state.focusIndex = Math.min(focusables.length - 1, state.focusIndex + 1);
+          updatePhoneFocus(focusables);
+          break;
+        case "Enter": case " ":
+          event.preventDefault();
+          const action = focusables[state.focusIndex].dataset.action;
+          if (action === "listen") state.isListening ? stopListening() : startListening();
+          if (action === "swap") swapLanguages();
+          if (action === "clear") clearAll();
+          break;
+      }
+    };
+
+    function updatePhoneFocus(focusables) {
+      focusables.forEach((el, i) => el.classList.toggle("active", i === state.focusIndex));
+    }
+
+    // Click handlers
+    document.getElementById("btn-listen").addEventListener("click", () => state.isListening ? stopListening() : startListening());
+    document.getElementById("btn-swap").addEventListener("click", swapLanguages);
+    document.getElementById("btn-clear").addEventListener("click", clearAll);
+  }
+
+  // ===========================
+  // GLASSES MODE (display only)
+  // ===========================
+  function initGlasses() {
+    const srcEl = document.getElementById("glasses-source-text");
+    const tgtEl = document.getElementById("glasses-target-text");
+    const dirEl = document.getElementById("glasses-direction");
+
+    // Poll for new translations
+    state.pollTimer = setInterval(async () => {
+      try {
+        const resp = await fetch(`${CONFIG.sessionEndpoint}?id=${state.sessionId}`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+
+        if (data.timestamp && data.timestamp > state.lastTimestamp) {
+          state.lastTimestamp = data.timestamp;
+          srcEl.textContent = truncate(data.source || "");
+          tgtEl.textContent = truncate(data.translation || "—");
+          dirEl.textContent = data.direction === "ga-en" ? "GA → EN" : "EN → GA";
+        }
+      } catch (err) {
+        // Silent retry
+      }
+    }, CONFIG.pollIntervalMs);
   }
 
   // --- Utilities ---
   function truncate(text) {
     return text.length <= CONFIG.maxDisplayChars ? text : text.slice(0, CONFIG.maxDisplayChars) + "…";
   }
-
-  function getSupportedMimeType() {
-    const types = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"];
-    for (const type of types) {
-      if (MediaRecorder.isTypeSupported(type)) return type;
-    }
-    return "audio/webm";
-  }
-
-  async function blobToBase64(blob) {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64 = reader.result.split(",")[1];
-        resolve(base64);
-      };
-      reader.readAsDataURL(blob);
-    });
-  }
-
-  // --- Init ---
-  updateFocus();
-  updateDirectionUI();
-
-  // Touch/click support for desktop testing
-  focusables.forEach((btn, i) => {
-    btn.addEventListener("click", () => {
-      state.focusIndex = i;
-      updateFocus();
-      activateFocused();
-    });
-  });
 
 })();
