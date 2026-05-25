@@ -1,15 +1,13 @@
-// api/speech.js — Vercel Serverless Function for Speech-to-Text
-// Uses Google Cloud Speech-to-Text API
-// Receives audio blob, returns transcribed text
+// api/speech.js — Speech-to-Text (handles all audio formats)
+// Supports: webm/opus (Chrome), mp4/aac (Safari/iOS), ogg/opus (Firefox)
 
-export const config: {
-  // Auto-detect encoding based on what the browser sends
-  encoding: "ENCODING_UNSPECIFIED",
-  sampleRateHertz: 48000,
-  languageCode: language || "en-US",
-  alternativeLanguageCodes: ["ga-IE", "en-US"],
-  enableAutomaticPunctuation: true,
-},
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: "4mb",
+    },
+  },
+};
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -19,7 +17,7 @@ export default async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const { audio, language } = req.body || {};
+  const { audio, language, mimeType } = req.body || {};
 
   if (!audio) {
     return res.status(400).json({ error: "Missing audio data" });
@@ -30,25 +28,50 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Google API key not configured" });
   }
 
+  // Map browser mimeType to Google Cloud Speech encoding
+  const encodingMap = {
+    "audio/webm;codecs=opus": "WEBM_OPUS",
+    "audio/webm": "WEBM_OPUS",
+    "audio/ogg;codecs=opus": "OGG_OPUS",
+    "audio/ogg": "OGG_OPUS",
+    "audio/mp4": "MP4_AAC",      // iOS Safari
+    "audio/aac": "MP4_AAC",
+    "audio/mpeg": "MP3",
+  };
+
+  // Determine encoding — fall back to auto-detect if unknown
+  const encoding = encodingMap[mimeType] || "ENCODING_UNSPECIFIED";
+
+  // Sample rate: 48000 for webm/ogg, 44100 for mp4
+  const sampleRate = (mimeType && mimeType.includes("mp4")) ? 44100 : 48000;
+
   try {
-    // Google Cloud Speech-to-Text API v1
     const url = `https://speech.googleapis.com/v1/speech:recognize?key=${apiKey}`;
+
+    const requestBody = {
+      config: {
+        encoding: encoding,
+        sampleRateHertz: sampleRate,
+        languageCode: language || "en-US",
+        alternativeLanguageCodes: ["ga-IE", "en-US", "en-GB"],
+        enableAutomaticPunctuation: true,
+        model: "default",
+      },
+      audio: {
+        content: audio,
+      },
+    };
+
+    // If encoding is unspecified, let Google auto-detect
+    if (encoding === "ENCODING_UNSPECIFIED") {
+      delete requestBody.config.encoding;
+      delete requestBody.config.sampleRateHertz;
+    }
 
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        config: {
-          encoding: "WEBM_OPUS",
-          sampleRateHertz: 48000,
-          languageCode: language || "en-US",
-          alternativeLanguageCodes: ["ga-IE", "en-US"],
-          enableAutomaticPunctuation: true,
-        },
-        audio: {
-          content: audio, // base64-encoded audio
-        },
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
