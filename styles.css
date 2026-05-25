@@ -1,5 +1,5 @@
 /* Gaeilge Live — Meta Ray-Ban Display Translator */
-/* Phone ↔ Glasses Bridge */
+/* Green theme | Helvetica | D-pad optimized */
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -7,9 +7,9 @@ html, body {
   width: 600px;
   height: 600px;
   overflow: hidden;
-  background: #000;
+  background: #0a1f0a;
   color: #fff;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 22px;
   line-height: 1.4;
 }
@@ -35,28 +35,33 @@ html, body {
 }
 
 .mode-title {
-  font-size: 36px;
-  font-weight: 700;
-  color: #4fc3f7;
+  font-size: 38px;
+  font-weight: 300;
+  color: #fff;
+  letter-spacing: 2px;
 }
 
 .mode-subtitle {
-  font-size: 18px;
-  color: #888;
-  margin-bottom: 20px;
+  font-size: 16px;
+  color: #81C784;
+  margin-bottom: 24px;
+  text-transform: uppercase;
+  letter-spacing: 3px;
 }
 
 .mode-btn {
   width: 80%;
-  padding: 20px;
-  font-size: 22px;
+  padding: 22px;
+  font-size: 20px;
   text-align: center;
+  letter-spacing: 0.5px;
 }
 
 .mode-hint {
-  font-size: 14px;
-  color: #666;
-  margin-top: 20px;
+  font-size: 13px;
+  color: #4CAF50;
+  margin-top: 24px;
+  letter-spacing: 1px;
 }
 
 /* --- Shared Styles --- */
@@ -64,33 +69,31 @@ html, body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 16px;
-  font-size: 18px;
-  opacity: 0.9;
+  padding: 12px 16px;
+  font-size: 16px;
+  border-bottom: 1px solid #1B5E20;
 }
 
 #direction-label, #glasses-direction {
-  font-weight: 700;
-  color: #4fc3f7;
+  font-weight: 600;
+  color: #A5D6A7;
+  letter-spacing: 1px;
 }
 
 #session-code-display, #glasses-session {
-  font-family: monospace;
-  font-size: 20px;
-  color: #ff9800;
+  font-family: "Helvetica Neue", monospace;
+  font-size: 18px;
+  color: #fff;
   font-weight: 700;
-  background: #1a1a1a;
-  padding: 2px 10px;
+  background: #1B5E20;
+  padding: 4px 12px;
   border-radius: 4px;
+  letter-spacing: 2px;
 }
 
-.mic-off { color: #666; }
-.mic-on { color: #4caf50; animation: pulse 1s infinite; }
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
+.mic-off { color: #555; }
+.mic-on { color: #66BB6A; animation: pulse 1.2s infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
 /* --- Translation Panels --- */
 #translation-area, #glasses-display {
@@ -98,8 +101,8 @@ html, body {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 8px;
-  padding: 12px 16px;
+  gap: 10px;
+  padding: 16px;
 }
 
 .text-panel, .glasses-panel {
@@ -107,74 +110,79 @@ html, body {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 16px 20px;
-  border-radius: 12px;
+  padding: 18px 22px;
+  border-radius: 10px;
   max-height: 200px;
   overflow-y: auto;
 }
 
 #source-text, #glasses-source {
-  background: #1a1a2e;
-  border: 1px solid #333;
+  background: #0d260d;
+  border: 1px solid #2E7D32;
 }
 
 #target-text, #glasses-target {
-  background: #0d2137;
-  border: 1px solid #1a5276;
+  background: #1a3a1a;
+  border: 1px solid #43A047;
 }
 
 .panel-label {
-  font-size: 14px;
+  font-size: 12px;
   text-transform: uppercase;
-  letter-spacing: 1.5px;
-  color: #888;
-  margin-bottom: 6px;
+  letter-spacing: 2px;
+  color: #66BB6A;
+  margin-bottom: 8px;
+  font-weight: 500;
 }
 
 .panel-content {
   font-size: 26px;
-  font-weight: 500;
+  font-weight: 400;
   line-height: 1.3;
   word-wrap: break-word;
-  color: #e0e0e0;
+  color: #E8F5E9;
 }
 
 .glasses-translation, #target-content {
-  color: #4fc3f7 !important;
+  color: #fff !important;
   font-weight: 600 !important;
+  font-size: 28px !important;
 }
 
 #divider, #glasses-divider {
-  height: 2px;
-  background: linear-gradient(90deg, transparent, #4fc3f7, transparent);
-  margin: 4px 40px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #4CAF50, transparent);
+  margin: 6px 50px;
 }
 
 /* --- Controls --- */
 #controls {
   display: flex;
   justify-content: center;
-  gap: 16px;
-  padding: 12px 0;
+  gap: 14px;
+  padding: 14px 0;
 }
 
 .focusable {
-  background: #1a1a1a;
-  color: #fff;
-  border: 2px solid #444;
+  background: #0d260d;
+  color: #C8E6C9;
+  border: 2px solid #2E7D32;
   border-radius: 8px;
-  padding: 10px 20px;
-  font-size: 18px;
+  padding: 12px 22px;
+  font-size: 17px;
   font-weight: 600;
+  font-family: "Helvetica Neue", Helvetica, sans-serif;
   cursor: pointer;
   transition: all 0.15s ease;
   outline: none;
+  letter-spacing: 0.5px;
 }
 
 .focusable:focus, .focusable.active {
-  border-color: #4fc3f7;
-  background: #0d2137;
-  box-shadow: 0 0 12px rgba(79, 195, 247, 0.4);
+  border-color: #66BB6A;
+  background: #1B5E20;
+  box-shadow: 0 0 16px rgba(76, 175, 80, 0.4);
+  color: #fff;
   transform: scale(1.05);
 }
 
@@ -183,26 +191,84 @@ html, body {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   padding: 10px;
-  font-size: 18px;
+  font-size: 16px;
 }
 
-.lang-active { color: #4fc3f7; font-weight: 600; }
-#lang-arrow { color: #666; font-size: 22px; }
+.lang-active { color: #A5D6A7; font-weight: 600; }
+#lang-arrow { color: #4CAF50; font-size: 20px; }
 
 /* --- Glasses Footer --- */
-#glasses-footer {
-  text-align: center;
-  padding: 16px;
+#glasses-footer { text-align: center; padding: 16px; }
+.glasses-hint { font-size: 14px; color: #66BB6A; letter-spacing: 1px; }
+
+/* --- Number Pad --- */
+#numpad-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 30px;
 }
 
-.glasses-hint {
-  font-size: 16px;
-  color: #4caf50;
+.numpad-title {
+  font-size: 22px;
+  color: #A5D6A7;
+  font-weight: 400;
+  margin-bottom: 24px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
 }
+
+#numpad-display {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 32px;
+}
+
+.digit-slot {
+  width: 52px;
+  height: 62px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36px;
+  font-weight: 300;
+  font-family: "Helvetica Neue", monospace;
+  color: #2E7D32;
+  border-bottom: 2px solid #2E7D32;
+}
+
+.digit-filled {
+  color: #fff;
+  border-bottom-color: #66BB6A;
+}
+
+#numpad-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  width: 320px;
+}
+
+.numpad-key {
+  width: 100px;
+  height: 60px;
+  font-size: 28px;
+  font-weight: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-family: "Helvetica Neue", Helvetica, sans-serif;
+}
+
+.numpad-del { color: #FFAB91; }
+.numpad-ok { color: #A5D6A7; }
 
 /* --- Scrollbar --- */
-::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar { width: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #444; border-radius: 2px; }
+::-webkit-scrollbar-thumb { background: #2E7D32; border-radius: 2px; }
