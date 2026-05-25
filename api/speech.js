@@ -2,13 +2,14 @@
 // Uses Google Cloud Speech-to-Text API
 // Receives audio blob, returns transcribed text
 
-export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: "4mb",
-    },
-  },
-};
+export const config: {
+  // Auto-detect encoding based on what the browser sends
+  encoding: "ENCODING_UNSPECIFIED",
+  sampleRateHertz: 48000,
+  languageCode: language || "en-US",
+  alternativeLanguageCodes: ["ga-IE", "en-US"],
+  enableAutomaticPunctuation: true,
+},
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
