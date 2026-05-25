@@ -1,6 +1,5 @@
-// Gaeilge Live — Phone ↔ Glasses Bridge
-// Phone: captures speech, translates, pushes to session
-// Glasses: polls session, displays translation on HUD
+// Gaeilge Live — Phone ↔ Glasses Bridge v2
+// Now with D-pad navigable number pad for session code entry on glasses
 
 (function() {
   "use strict";
@@ -13,13 +12,17 @@
   };
 
   let state = {
-    mode: null,        // "phone" or "glasses"
+    mode: null,
+    screen: "mode-select", // mode-select, numpad, phone, glasses
     sessionId: null,
     direction: "ga-en",
     isListening: false,
     focusIndex: 0,
     lastTimestamp: 0,
     pollTimer: null,
+    // Numpad state
+    numpadDigits: [],
+    numpadFocusIndex: 4, // Start focused on "5" (middle of grid)
   };
 
   // --- Generate 4-digit session code ---
@@ -27,60 +30,149 @@
     return String(Math.floor(1000 + Math.random() * 9000));
   }
 
+  // --- Screen management ---
+  function showScreen(name) {
+    state.screen = name;
+    document.getElementById("mode-select").classList.toggle("hidden", name !== "mode-select");
+    document.getElementById("numpad-screen").classList.toggle("hidden", name !== "numpad");
+    document.getElementById("phone-mode").classList.toggle("hidden", name !== "phone");
+    document.getElementById("glasses-mode").classList.toggle("hidden", name !== "glasses");
+  }
+
   // --- Mode Selection ---
-  const modeSelect = document.getElementById("mode-select");
-  const phoneMode = document.getElementById("phone-mode");
-  const glassesMode = document.getElementById("glasses-mode");
-  const modeBtns = modeSelect.querySelectorAll(".mode-btn");
+  const modeBtns = document.querySelectorAll("#mode-select .mode-btn");
   let modeFocusIndex = 0;
 
   function selectMode(mode) {
     state.mode = mode;
-    state.sessionId = generateSessionId();
-    modeSelect.classList.add("hidden");
-
     if (mode === "phone") {
-      phoneMode.classList.remove("hidden");
+      state.sessionId = generateSessionId();
       document.getElementById("session-code-display").textContent = state.sessionId;
+      showScreen("phone");
       initPhone();
     } else {
-      glassesMode.classList.remove("hidden");
-      // Prompt for session code (use same as phone shows)
-      const code = prompt("Enter 4-digit code from phone:");
-      if (code && code.length === 4) {
-        state.sessionId = code;
-      }
-      document.getElementById("glasses-session").textContent = state.sessionId;
-      initGlasses();
+      // Show numpad for code entry
+      state.numpadDigits = [];
+      state.numpadFocusIndex = 4;
+      updateNumpadDisplay();
+      updateNumpadFocus();
+      showScreen("numpad");
     }
   }
 
-  // Mode selector D-pad navigation
-  document.addEventListener("keydown", (event) => {
-    if (state.mode === null) {
-      // Mode selection screen
-      if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
-        modeFocusIndex = 0;
-        updateModeFocus();
-      } else if (event.key === "ArrowDown" || event.key === "ArrowRight") {
-        modeFocusIndex = 1;
-        updateModeFocus();
-      } else if (event.key === "Enter" || event.key === " ") {
-        selectMode(modeFocusIndex === 0 ? "phone" : "glasses");
-      }
-    } else if (state.mode === "phone") {
-      handlePhoneKeydown(event);
-    }
-  });
-
-  function updateModeFocus() {
-    modeBtns.forEach((btn, i) => btn.classList.toggle("active", i === modeFocusIndex));
-  }
-
-  // Click support
-  modeBtns.forEach((btn, i) => {
+  // Click support for mode buttons
+  modeBtns.forEach(btn => {
     btn.addEventListener("click", () => selectMode(btn.dataset.mode));
   });
+
+  // ===========================
+  // NUMPAD (Glasses code entry)
+  // ===========================
+  const numpadKeys = document.querySelectorAll(".numpad-key");
+
+  function updateNumpadDisplay() {
+    for (let i = 0; i < 4; i++) {
+      const el = document.getElementById("d" + i);
+      el.textContent = state.numpadDigits[i] || "_";
+      el.classList.toggle("digit-filled", !!state.numpadDigits[i]);
+    }
+  }
+
+  function updateNumpadFocus() {
+    numpadKeys.forEach((key, i) => {
+      key.classList.toggle("active", i === state.numpadFocusIndex);
+    });
+  }
+
+  function numpadPress(digit) {
+    if (digit === "del") {
+      state.numpadDigits.pop();
+    } else if (digit === "ok") {
+      if (state.numpadDigits.length === 4) {
+        state.sessionId = state.numpadDigits.join("");
+        document.getElementById("glasses-session").textContent = state.sessionId;
+        showScreen("glasses");
+        initGlasses();
+      }
+    } else if (state.numpadDigits.length < 4) {
+      state.numpadDigits.push(digit);
+    }
+    updateNumpadDisplay();
+
+    // Auto-connect when 4 digits entered
+    if (state.numpadDigits.length === 4 && digit !== "ok" && digit !== "del") {
+      setTimeout(() => {
+        state.sessionId = state.numpadDigits.join("");
+        document.getElementById("glasses-session").textContent = state.sessionId;
+        showScreen("glasses");
+        initGlasses();
+      }, 400);
+    }
+  }
+
+  // Click support for numpad
+  numpadKeys.forEach(key => {
+    key.addEventListener("click", () => numpadPress(key.dataset.digit));
+  });
+
+  // ===========================
+  // GLOBAL KEYBOARD HANDLER
+  // ===========================
+  document.addEventListener("keydown", (event) => {
+    switch (state.screen) {
+      case "mode-select":
+        handleModeKeys(event);
+        break;
+      case "numpad":
+        handleNumpadKeys(event);
+        break;
+      case "phone":
+        handlePhoneKeys(event);
+        break;
+      // glasses mode has no interaction needed
+    }
+  });
+
+  function handleModeKeys(event) {
+    if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+      modeFocusIndex = 0;
+      modeBtns.forEach((b, i) => b.classList.toggle("active", i === 0));
+    } else if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+      modeFocusIndex = 1;
+      modeBtns.forEach((b, i) => b.classList.toggle("active", i === 1));
+    } else if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      selectMode(modeFocusIndex === 0 ? "phone" : "glasses");
+    }
+  }
+
+  function handleNumpadKeys(event) {
+    event.preventDefault();
+    const cols = 3;
+    const total = numpadKeys.length; // 12
+
+    switch (event.key) {
+      case "ArrowRight":
+        state.numpadFocusIndex = Math.min(total - 1, state.numpadFocusIndex + 1);
+        break;
+      case "ArrowLeft":
+        state.numpadFocusIndex = Math.max(0, state.numpadFocusIndex - 1);
+        break;
+      case "ArrowDown":
+        if (state.numpadFocusIndex + cols < total)
+          state.numpadFocusIndex += cols;
+        break;
+      case "ArrowUp":
+        if (state.numpadFocusIndex - cols >= 0)
+          state.numpadFocusIndex -= cols;
+        break;
+      case "Enter":
+      case " ":
+        numpadPress(numpadKeys[state.numpadFocusIndex].dataset.digit);
+        break;
+    }
+    updateNumpadFocus();
+  }
 
   // ===========================
   // PHONE MODE
@@ -94,11 +186,11 @@
       btnListen: document.getElementById("btn-listen"),
       langSource: document.getElementById("lang-source"),
       langTarget: document.getElementById("lang-target"),
-      app: document.getElementById("app"),
     };
-    const focusables = phoneMode.querySelectorAll(".focusable");
+    const focusables = document.querySelectorAll("#phone-mode .focusable");
+    state.focusIndex = 0;
+    focusables[0].classList.add("active");
 
-    // Web Speech API (works on phone browsers)
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition = null;
 
@@ -108,8 +200,7 @@
       recognition.interimResults = true;
 
       recognition.onresult = (event) => {
-        let final = "";
-        let interim = "";
+        let final = "", interim = "";
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const t = event.results[i][0].transcript;
           if (event.results[i].isFinal) final += t;
@@ -125,9 +216,7 @@
       };
 
       recognition.onend = () => {
-        if (state.isListening) {
-          try { recognition.start(); } catch(e) {}
-        }
+        if (state.isListening) try { recognition.start(); } catch(e) {}
       };
     }
 
@@ -140,19 +229,18 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text, from, to }),
         });
-        if (!resp.ok) throw new Error("Translation failed");
+        if (!resp.ok) throw new Error("Failed");
         const data = await resp.json();
-        const translation = data.translation || "";
-        els.targetContent.textContent = truncate(translation);
+        els.targetContent.textContent = truncate(data.translation || "");
 
-        // Push to session for glasses
+        // Push to glasses
         await fetch(CONFIG.sessionEndpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             sessionId: state.sessionId,
             source: text,
-            translation,
+            translation: data.translation,
             direction: state.direction,
           }),
         });
@@ -162,10 +250,7 @@
     }
 
     function startListening() {
-      if (!recognition) {
-        els.sourceContent.textContent = "Speech not supported";
-        return;
-      }
+      if (!recognition) { els.sourceContent.textContent = "Speech not supported"; return; }
       state.isListening = true;
       els.micStatus.textContent = "🎙️ ON";
       els.micStatus.className = "mic-on";
@@ -199,17 +284,13 @@
       els.targetContent.textContent = "—";
     }
 
-    // D-pad
-    window.handlePhoneKeydown = function(event) {
-      const focusables = phoneMode.querySelectorAll(".focusable");
+    window.handlePhoneKeys = function(event) {
       switch (event.key) {
         case "ArrowLeft":
           state.focusIndex = Math.max(0, state.focusIndex - 1);
-          updatePhoneFocus(focusables);
           break;
         case "ArrowRight":
           state.focusIndex = Math.min(focusables.length - 1, state.focusIndex + 1);
-          updatePhoneFocus(focusables);
           break;
         case "Enter": case " ":
           event.preventDefault();
@@ -219,11 +300,8 @@
           if (action === "clear") clearAll();
           break;
       }
-    };
-
-    function updatePhoneFocus(focusables) {
       focusables.forEach((el, i) => el.classList.toggle("active", i === state.focusIndex));
-    }
+    };
 
     // Click handlers
     document.getElementById("btn-listen").addEventListener("click", () => state.isListening ? stopListening() : startListening());
@@ -232,29 +310,25 @@
   }
 
   // ===========================
-  // GLASSES MODE (display only)
+  // GLASSES MODE
   // ===========================
   function initGlasses() {
     const srcEl = document.getElementById("glasses-source-text");
     const tgtEl = document.getElementById("glasses-target-text");
     const dirEl = document.getElementById("glasses-direction");
 
-    // Poll for new translations
     state.pollTimer = setInterval(async () => {
       try {
         const resp = await fetch(`${CONFIG.sessionEndpoint}?id=${state.sessionId}`);
         if (!resp.ok) return;
         const data = await resp.json();
-
         if (data.timestamp && data.timestamp > state.lastTimestamp) {
           state.lastTimestamp = data.timestamp;
           srcEl.textContent = truncate(data.source || "");
           tgtEl.textContent = truncate(data.translation || "—");
           dirEl.textContent = data.direction === "ga-en" ? "GA → EN" : "EN → GA";
         }
-      } catch (err) {
-        // Silent retry
-      }
+      } catch (err) {}
     }, CONFIG.pollIntervalMs);
   }
 
