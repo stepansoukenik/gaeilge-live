@@ -14,6 +14,41 @@
     maxDisplayChars: 120,
   };
 
+  // iOS TTS unlock — must be triggered by user gesture
+  let ttsUnlocked = false;
+  function unlockTTS() {
+    if (ttsUnlocked) return;
+    const u = new SpeechSynthesisUtterance("");
+    u.volume = 0;
+    speechSynthesis.speak(u);
+    ttsUnlocked = true;
+  }
+
+  // Robust speak function for iOS
+  function speakText(text, lang) {
+    if (!text || !window.speechSynthesis) return;
+    // iOS workaround: cancel + short delay before speaking
+    speechSynthesis.cancel();
+    setTimeout(() => {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = lang || "en-GB";
+      utterance.rate = 0.9;
+      utterance.volume = 1.0;
+      // iOS sometimes needs voices to be loaded first
+      const voices = speechSynthesis.getVoices();
+      if (voices.length > 0) {
+        const match = voices.find(v => v.lang.startsWith(lang.split("-")[0]));
+        if (match) utterance.voice = match;
+      }
+      speechSynthesis.speak(utterance);
+    }, 100);
+  }
+
+  // Unlock on any user interaction (tap, click, keypress)
+  ["click", "touchstart", "keydown"].forEach(evt => {
+    document.addEventListener(evt, unlockTTS, { once: true });
+  });
+
   let state = {
     device: null,      // "display" or "audio"
     mode: null,        // "phone", "glasses" (display mode only)
@@ -297,14 +332,7 @@
         els.targetText.textContent = truncate(translation);
 
         // Speak through glasses speakers (Bluetooth audio)
-        if (translation && window.speechSynthesis) {
-          const utterance = new SpeechSynthesisUtterance(translation);
-          utterance.lang = state.direction === "ga-en" ? "en-GB" : "ga-IE";
-          utterance.rate = 0.9;
-          utterance.volume = 1.0;
-          speechSynthesis.cancel();
-          speechSynthesis.speak(utterance);
-        }
+        speakText(translation, state.direction === "ga-en" ? "en-GB" : "ga-IE");
       } catch (err) {
         els.targetText.textContent = "⚠ Translation error";
       }
@@ -512,11 +540,7 @@
           srcEl.textContent = truncate(data.source || "");
           tgtEl.textContent = truncate(data.translation || "—");
           dirEl.textContent = data.direction === "ga-en" ? "GA → EN" : "EN → GA";
-          if (data.translation && window.speechSynthesis) {
-            const u = new SpeechSynthesisUtterance(data.translation);
-            u.lang = data.direction === "ga-en" ? "en-GB" : "ga-IE";
-            u.rate = 0.9; speechSynthesis.cancel(); speechSynthesis.speak(u);
-          }
+          speakText(data.translation, data.direction === "ga-en" ? "en-GB" : "ga-IE");
         }
       } catch (err) {}
     }, CONFIG.pollIntervalMs);
