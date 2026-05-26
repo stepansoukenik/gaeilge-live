@@ -1,41 +1,38 @@
 # 🍀 Gaeilge Live
 
-**Real-time Irish ↔ English translator for Meta Ray-Ban Display glasses.**
+**Real-time Irish ↔ English translator for Meta smart glasses.**
 
-Irish (Gaeilge) isn't natively supported in Meta's Live Translation — this web app fills that gap using a phone↔glasses bridge architecture.
+Irish (Gaeilge) isn't natively supported in Meta's Live Translation — this web app fills that gap. Works with both Ray-Ban Display (HUD) and Ray-Ban Meta (audio-only).
 
 ![Status](https://img.shields.io/badge/status-MVP-green)
-![Platform](https://img.shields.io/badge/platform-Meta%20Ray--Ban%20Display-black)
+![Platform](https://img.shields.io/badge/platform-Meta%20Glasses-black)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 ---
 
-## How It Works
+## Two Modes
+
+### 🕶️ Ray-Ban Display (HUD Mode)
+Phone captures speech → translates → displays on glasses HUD via session bridge.
 
 ```
-📱 Phone                          🕶️ Glasses
-─────────                         ──────────
-Mic → Speech Recognition          Polls session every 1.5s
-     → Google Translate API       Displays translation on HUD
-     → Push to shared session     (600×600 dark green UI)
+📱 Phone                          🕶️ Glasses HUD
+─────────                         ──────────────
+Mic → Transcribe                  Polls session every 1.5s
+     → Translate                  Displays translation (600×600)
+     → Push to Redis              Speaks translation (TTS)
          ↓                              ↑
          └──── Upstash Redis ───────────┘
-               (session bridge)
 ```
 
-The phone captures speech and translates it. The glasses display the result. A 4-digit session code links the two devices — entered via a D-pad navigable number pad on the glasses.
+### 🎧 Ray-Ban Meta (Audio-Only Mode)
+Single device — phone listens, translates, speaks translation through glasses speakers via Bluetooth.
 
----
-
-## Features
-
-- 🎙️ **Live speech recognition** via Web Speech API (phone)
-- 🇮🇪 **Irish ↔ English translation** via Google Cloud Translation API
-- 🕶️ **Glasses-optimized display** — 600×600px, dark green theme, high contrast
-- 🎮 **D-pad navigation** — fully usable with EMG wristband gestures
-- 🔢 **Number pad pairing** — no keyboard needed on glasses
-- 📱 **Phone↔Glasses bridge** — real-time sync via Upstash Redis
-- 🍀 **App icon** — shows in glasses launchpad
+```
+📱 Phone (connected to glasses via Bluetooth)
+─────────
+Mic → Transcribe → Translate → TTS → 🔊 Glasses speakers
+```
 
 ---
 
@@ -43,62 +40,65 @@ The phone captures speech and translates it. The glasses display the result. A 4
 
 ### Prerequisites
 
-- Meta Ray-Ban Display glasses with developer mode enabled
-- [Vercel](https://vercel.com) account (free tier)
-- [Google Cloud](https://console.cloud.google.com) project with Translation API enabled
-- [Upstash](https://upstash.com) Redis database (free tier)
+- Meta smart glasses (Display or Meta Gen 2)
+- [Vercel](https://vercel.com) account (free)
+- [Google Cloud](https://console.cloud.google.com) project with:
+  - Cloud Translation API enabled
+  - Cloud Speech-to-Text API enabled
+  - API key created
+- [Upstash](https://upstash.com) Redis database (free — needed for Display mode only)
 
-### 1. Clone & Deploy
+### 1. Deploy
 
 ```bash
 git clone https://github.com/stepansoukenik/gaeilge-live.git
 cd gaeilge-live
-
-# Deploy to Vercel
 npm install -g vercel
 vercel login
 vercel --prod
 ```
 
-### 2. Set Environment Variables
+### 2. Environment Variables
 
 In Vercel → Project → Settings → Environment Variables:
 
-| Variable | Source | Purpose |
-|----------|--------|---------|
-| `GOOGLE_TRANSLATE_API_KEY` | [Google Cloud Console](https://console.cloud.google.com) | Translation + Speech |
-| `UPSTASH_REDIS_REST_URL` | [Upstash Dashboard](https://console.upstash.com) | Session bridge |
-| `UPSTASH_REDIS_REST_TOKEN` | Upstash Dashboard | Auth for Redis |
+| Variable | Source | Required for |
+|----------|--------|--------------|
+| `GOOGLE_TRANSLATE_API_KEY` | Google Cloud Console → Credentials | Both modes |
+| `UPSTASH_REDIS_REST_URL` | Upstash Console → REST API | Display mode |
+| `UPSTASH_REDIS_REST_TOKEN` | Upstash Console → REST API | Display mode |
 
-### 3. Add to Glasses
+### 3. Add to Glasses (Display mode)
 
-1. Open **Meta AI app** → Devices → Display Glasses
-2. App connections → Web apps → Add
-3. Name: `Gaeilge Live` / URL: `https://gaeilge-live.vercel.app`
+1. Meta AI app → Devices → App connections → Web apps → Add
+2. Name: `Gaeilge Live`
+3. URL: `https://gaeilge-live.vercel.app`
 
 ---
 
 ## Usage
 
-### On your phone:
+### Audio-Only Mode (Ray-Ban Meta)
+
+1. Open `gaeilge-live.vercel.app` on your phone
+2. Select **🎧 Ray-Ban Meta**
+3. Tap **● Listen** — speak Irish or English
+4. Translation plays through glasses speakers automatically
+5. Tap **⇄ Swap** to change direction
+
+### Display Mode (Ray-Ban Display)
+
+**On your phone/laptop:**
 1. Open `gaeilge-live.vercel.app`
-2. Select **📱 Phone (mic + send)**
-3. Note the **4-digit session code**
+2. Select **🕶️ Ray-Ban Display** → **📱 Phone**
+3. Note the 4-digit session code
 4. Tap **● Listen** and speak
 
-### On your glasses:
-1. Launch **Gaeilge Live** from the app launcher
-2. Select **🕶️ Glasses (display)**
-3. Use the D-pad number pad to enter the session code
-4. Translations appear automatically on the HUD
-
-### D-Pad Controls
-
-| Input | Mode Select | Number Pad | Phone |
-|-------|-------------|------------|-------|
-| ← → | Switch mode | Move between digits | Switch buttons |
-| ↑ ↓ | — | Move between rows | — |
-| Select | Confirm | Press digit | Activate button |
+**On your glasses:**
+1. Launch Gaeilge Live from the app launcher
+2. Select **🕶️ Glasses**
+3. Enter the 4-digit code via D-pad number pad
+4. Translations appear on HUD + spoken aloud
 
 ---
 
@@ -106,50 +106,55 @@ In Vercel → Project → Settings → Environment Variables:
 
 ```
 gaeilge-live/
-├── index.html              # App shell (mode selector, numpad, phone, glasses views)
-├── styles.css              # Green theme, Helvetica, D-pad focus styles
-├── app.js                  # Core logic (speech, translation, session bridge)
+├── index.html              # Device selector + all mode UIs
+├── styles.css              # Green theme, Helvetica, responsive
+├── app.js                  # Core logic (both modes)
 ├── icon-96.png             # App icon (glasses launchpad)
-├── icon-192.png            # App icon (larger)
+├── icon-192.png            # Larger icon
 ├── manifest.webmanifest    # Web app manifest
 ├── api/
-│   ├── translate.js        # Translation serverless function (Google API)
-│   └── session.js          # Session bridge (Upstash Redis)
+│   ├── translate.js        # Google Translation API proxy
+│   ├── speech.js           # Google Speech-to-Text proxy
+│   └── session.js          # Upstash Redis session bridge
 └── package.json
 ```
 
 ---
 
-## Design Constraints (MRBD)
+## Design
 
-| Constraint | Implementation |
-|-----------|---------------|
-| 600×600px viewport | Fixed layout, no scrolling |
-| Black = transparent | Dark green (#0a1f0a) background |
-| High contrast | White text, green (#66BB6A) accents |
-| D-pad only | `.focusable` class + arrow key handlers |
-| Readable fonts | Helvetica Neue, 22–28px |
-| No keyboard | Visual number pad for input |
-| No mic access | Phone-as-mic bridge architecture |
+| Element | Value |
+|---------|-------|
+| Background | Dark green (#0a1f0a) |
+| Accents | Green (#2E7D32, #66BB6A) |
+| Text | White, Helvetica Neue |
+| Viewport | 600×600 (glasses), responsive (phone/desktop) |
+| Navigation | D-pad (arrow keys + Enter) |
+| Icon | Shamrock in speech bubble (transparent PNG) |
 
 ---
 
-## Limitations & Known Issues
+## Known Limitations
 
-1. **Irish speech recognition** — Web Speech API has limited `ga-IE` accuracy. Works better for common phrases. English mode is more reliable.
-2. **Latency** — ~1.5s polling interval + ~300ms API round-trip = ~2s total delay.
-3. **Session expiry** — Sessions expire after 5 minutes of inactivity (Redis TTL).
-4. **Free tier limits** — Google Translation: $10/month credit (~500K chars). Upstash: 10K commands/day.
+| Issue | Status |
+|-------|--------|
+| MRBD web apps can't access microphone | Waiting for Meta platform team |
+| Phone mic triggers BT call mode on glasses | Workaround: use separate device as mic |
+| Web Speech API unavailable on iOS/glasses | MediaRecorder + Cloud Speech fallback |
+| Irish speech recognition accuracy | Limited in ga-IE; English mode more reliable |
+| ~2s translation latency | Polling (1.5s) + API round-trip (~300ms) |
+| Session expires after 5 min idle | Redis TTL — reconnect if needed |
 
 ---
 
 ## Roadmap
 
-- [ ] Server-Sent Events (SSE) for instant display updates
-- [ ] Auto language detection (remove manual swap)
-- [ ] Phrase history (scroll through recent translations)
-- [ ] Offline phrase book for common expressions
-- [ ] Specialized Irish ASR model integration
+- [ ] Mic access for MRBD web apps (platform dependency)
+- [ ] Server-Sent Events (replace polling for instant updates)
+- [ ] Auto language detection
+- [ ] Phrase history (scroll recent translations)
+- [ ] Offline phrase book
+- [ ] Specialized Irish ASR model
 
 ---
 
@@ -158,18 +163,18 @@ gaeilge-live/
 | Component | Technology |
 |-----------|-----------|
 | Frontend | Vanilla HTML/CSS/JS |
-| Hosting | Vercel (free tier, auto-HTTPS) |
+| Hosting | Vercel (free tier) |
 | Translation | Google Cloud Translation API v2 |
-| Session sync | Upstash Redis (REST API) |
-| Speech | Web Speech API (phone browser) |
-| Design | 600×600 dark green, Helvetica, D-pad focus |
+| Speech | Google Cloud Speech-to-Text + Web Speech API |
+| TTS | Web Speech Synthesis API |
+| Session | Upstash Redis (REST API) |
 
 ---
 
 ## License
 
-MIT — Use freely for your Meta Ray-Ban Display projects.
+MIT
 
 ---
 
-*Built as a prototype to demonstrate Irish language support on Meta Ray-Ban Display glasses.*
+*Built as a prototype demonstrating Irish language support on Meta smart glasses.*
