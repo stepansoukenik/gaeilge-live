@@ -12,10 +12,23 @@
 </head>
 <body>
   <div id="app">
-    <!-- Mode Selector -->
-    <div id="mode-select">
+    <!-- Device Selector (first screen) -->
+    <div id="device-select">
       <div class="mode-title">Gaeilge Live</div>
       <div class="mode-subtitle">Irish ↔ English Translator</div>
+      <button class="focusable mode-btn active" id="btn-display" data-device="display" tabindex="1" role="button">
+        🕶️ Ray-Ban Display<br><span class="btn-desc">HUD + phone bridge</span>
+      </button>
+      <button class="focusable mode-btn" id="btn-audio" data-device="audio" tabindex="2" role="button">
+        🎧 Ray-Ban Meta<br><span class="btn-desc">Audio-only (mic + speakers)</span>
+      </button>
+      <div class="mode-hint">Choose your glasses model</div>
+    </div>
+
+    <!-- DISPLAY MODE: Mode Selector (phone/glasses) -->
+    <div id="mode-select" class="hidden">
+      <div class="mode-title">Display Mode</div>
+      <div class="mode-subtitle">Choose device role</div>
       <button class="focusable mode-btn active" id="btn-phone" data-mode="phone" tabindex="1" role="button">
         📱 Phone (mic + send)
       </button>
@@ -25,7 +38,7 @@
       <div class="mode-hint">Session code connects both devices</div>
     </div>
 
-    <!-- Number Pad for Glasses -->
+    <!-- DISPLAY MODE: Number Pad -->
     <div id="numpad-screen" class="hidden">
       <div class="numpad-title">Enter session code</div>
       <div id="numpad-display">
@@ -50,7 +63,7 @@
       </div>
     </div>
 
-    <!-- Phone Mode -->
+    <!-- DISPLAY MODE: Phone -->
     <div id="phone-mode" class="hidden">
       <div id="status-bar">
         <span id="direction-label">GA → EN</span>
@@ -80,7 +93,7 @@
       </div>
     </div>
 
-    <!-- Glasses Mode -->
+    <!-- DISPLAY MODE: Glasses HUD -->
     <div id="glasses-mode" class="hidden">
       <div id="glasses-status-bar">
         <span id="glasses-direction">GA → EN</span>
@@ -99,6 +112,44 @@
       </div>
       <div id="glasses-footer">
         <span class="glasses-hint">● Connected to phone</span>
+      </div>
+    </div>
+
+    <!-- AUDIO MODE: Single device, mic + TTS -->
+    <div id="audio-mode" class="hidden">
+      <div id="audio-status-bar">
+        <span id="audio-direction">GA → EN</span>
+        <span id="audio-mic-status" class="mic-off">🎙️ OFF</span>
+      </div>
+      <div id="audio-display">
+        <div class="text-panel audio-source-panel">
+          <div class="panel-label">Heard</div>
+          <div class="panel-content" id="audio-source-text">Tap to start listening</div>
+        </div>
+        <div id="audio-divider" class="divider-line"></div>
+        <div class="text-panel audio-target-panel">
+          <div class="panel-label">Translation (spoken aloud)</div>
+          <div class="panel-content glasses-translation" id="audio-target-text">—</div>
+        </div>
+      </div>
+      <div id="audio-controls">
+        <button class="focusable audio-btn active" id="btn-audio-listen" data-action="listen">
+          ● Listen
+        </button>
+        <button class="focusable audio-btn" id="btn-audio-swap" data-action="swap">
+          ⇄ Swap
+        </button>
+        <button class="focusable audio-btn" id="btn-audio-stop" data-action="stop">
+          ■ Stop
+        </button>
+      </div>
+      <div id="audio-lang-bar">
+        <span id="audio-lang-source" class="lang-active">🇮🇪 Gaeilge</span>
+        <span class="lang-arrow-audio">→</span>
+        <span id="audio-lang-target">🇬🇧 English</span>
+      </div>
+      <div id="audio-hint">
+        <span>🔊 Translation plays through glasses speakers</span>
       </div>
     </div>
   </div>
