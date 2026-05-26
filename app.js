@@ -86,7 +86,7 @@
     mode: null,        // "phone", "glasses" (display mode only)
     screen: "device-select",
     sessionId: null,
-    direction: "ga-en",
+    direction: "en-ga",
     isListening: false,
     focusIndex: 0,
     lastTimestamp: 0,
