@@ -62,8 +62,9 @@ export default async function handler(req, res) {
       },
     };
 
-    // If encoding is unspecified, let Google auto-detect
-    if (encoding === "ENCODING_UNSPECIFIED") {
+    // If encoding is unspecified OR language is Irish, let Google auto-detect
+    // Irish (ga-IE) doesn't support all encodings
+    if (encoding === "ENCODING_UNSPECIFIED" || language === "ga-IE") {
       delete requestBody.config.encoding;
       delete requestBody.config.sampleRateHertz;
     }
