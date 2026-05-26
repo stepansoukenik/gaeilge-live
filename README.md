@@ -2,40 +2,41 @@
 
 **Real-time Irish ↔ English translator for Meta smart glasses.**
 
-Irish (Gaeilge) isn't natively supported in Meta's Live Translation. This web app fills that gap — providing live speech-to-translation through the glasses speakers.
+Irish (Gaeilge) isn't natively supported in Meta's Live Translation. This web app fills that gap — providing live speech-to-translation through the glasses speakers using ElevenLabs' multilingual AI.
 
-![Status](https://img.shields.io/badge/status-MVP-green)
+**Try it:** [gaeilge-live.vercel.app](https://gaeilge-live.vercel.app)
+
+![Status](https://img.shields.io/badge/status-Working%20MVP-brightgreen)
 ![Platform](https://img.shields.io/badge/platform-Ray--Ban%20Meta-black)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 ---
 
-## Current Status
+## Demo
 
-| Mode | Status | Notes |
-|------|--------|-------|
-| 🎧 **Ray-Ban Meta (Audio)** | ✅ Working | Speak → Translate → Hear translation in glasses |
-| 🕶️ **Ray-Ban Display (HUD)** | ⏸️ Paused | Awaiting platform mic access for web apps |
-
-### What Works Today
-
-Open `gaeilge-live.vercel.app` on your phone → select Audio mode → speak Irish or English → hear the translation through your Ray-Ban Meta speakers. That's it.
-
-### Why Display Mode is Paused
-
-Meta Ray-Ban Display web apps currently cannot access the microphone (`getUserMedia` is blocked). Additionally, activating the phone mic while glasses are Bluetooth-paired triggers a phone call UI on the glasses. The Display mode architecture (phone↔glasses bridge) is fully built and will be re-enabled when the platform team ships mic access for web apps.
+Speak English → hear Irish in your glasses. Speak Irish → hear English. Real-time, hands-free.
 
 ---
 
-## How It Works (Audio Mode)
+## Current Status
+
+| Mode | Status | How It Works |
+|------|--------|--------------|
+| 🎧 **Ray-Ban Meta (Audio)** | ✅ Working | Speak → ElevenLabs STT → Translate → ElevenLabs TTS → glasses speakers |
+| 🕶️ **Ray-Ban Display (HUD)** | ⏸️ Coming Soon | Awaiting platform mic access for web apps |
+
+---
+
+## How It Works
 
 ```
-📱 Your phone (paired to Ray-Ban Meta via Bluetooth)
-─────────────────────────────────────────────────────
-1. Mic captures speech (Web Speech API or MediaRecorder)
-2. Google Cloud Speech-to-Text → transcript
-3. Google Cloud Translation → Irish↔English
-4. Web Speech Synthesis → plays through glasses speakers 🔊
+📱 Phone (paired to Ray-Ban Meta via Bluetooth)
+───────────────────────────────────────────────
+1. Mic captures speech
+2. ElevenLabs Scribe → transcribes (97+ languages, Irish included)
+3. Google Cloud Translation → Irish ↔ English
+4. ElevenLabs TTS → natural voice speaks translation
+5. Audio plays through glasses speakers via Bluetooth 🔊
 ```
 
 Everything runs in the phone browser. The glasses are a Bluetooth audio device — mic picks up speech, speakers play translations.
@@ -49,10 +50,8 @@ Everything runs in the phone browser. The glasses are a Bluetooth audio device �
 - Ray-Ban Meta glasses (Gen 2) paired to your phone
 - Phone browser (Safari or Chrome)
 - [Vercel](https://vercel.com) account (free)
-- [Google Cloud](https://console.cloud.google.com) project with:
-  - Cloud Translation API enabled
-  - Cloud Speech-to-Text API enabled
-  - API key created
+- [ElevenLabs](https://elevenlabs.io) account (Starter plan, $5/mo — for multilingual TTS + Scribe STT)
+- [Google Cloud](https://console.cloud.google.com) project with Cloud Translation API enabled
 
 ### Deploy
 
@@ -66,22 +65,28 @@ vercel --prod
 
 ### Environment Variables (Vercel)
 
-| Variable | Source |
-|----------|--------|
-| `GOOGLE_TRANSLATE_API_KEY` | Google Cloud Console → Credentials |
-| `UPSTASH_REDIS_REST_URL` | Upstash Console (for Display mode) |
-| `UPSTASH_REDIS_REST_TOKEN` | Upstash Console (for Display mode) |
+| Variable | Source | Purpose |
+|----------|--------|---------|
+| `ELEVENLABS_API_KEY` | [elevenlabs.io](https://elevenlabs.io) → Profile | STT (Scribe) + TTS |
+| `GOOGLE_TRANSLATE_API_KEY` | [Google Cloud Console](https://console.cloud.google.com) → Credentials | Translation |
+| `UPSTASH_REDIS_REST_URL` | [Upstash](https://console.upstash.com) | Display mode (future) |
+| `UPSTASH_REDIS_REST_TOKEN` | Upstash | Display mode (future) |
 
 ---
 
 ## Usage
 
-1. Pair your Ray-Ban Meta glasses to your phone
+1. Pair your Ray-Ban Meta glasses to your phone (Bluetooth)
 2. Open `gaeilge-live.vercel.app` in your phone browser
 3. Select **🎧 Ray-Ban Meta**
-4. Tap **● Listen** — speak Irish or English
+4. Tap **● Listen** — speak in English or Irish
 5. Hear the translation in your glasses speakers
-6. Tap **⇄ Swap** to change direction (GA→EN or EN→GA)
+6. Tap **⇄ Swap** to change direction
+7. Tap **✕ Clear** to reset history
+
+### Conversation History
+
+All translations are kept in a scrollable session. Scroll up to see earlier translations. Tap **✕ Clear** to reset.
 
 ---
 
@@ -91,39 +96,17 @@ vercel --prod
 gaeilge-live/
 ├── index.html              # App UI (device selector + audio mode)
 ├── styles.css              # Green theme, Helvetica, responsive
-├── app.js                  # Speech recognition + translation + TTS
-├── icon-96.png             # App icon
+├── app.js                  # Core logic (STT + translate + TTS)
+├── icon-96.png             # App icon (shamrock)
 ├── icon-192.png            # Larger icon
 ├── manifest.webmanifest    # Web app manifest
 ├── api/
 │   ├── translate.js        # Google Translation API proxy
-│   ├── speech.js           # Google Speech-to-Text proxy (fallback)
+│   ├── speech.js           # ElevenLabs Scribe STT
+│   ├── tts.js              # ElevenLabs TTS (multilingual)
 │   └── session.js          # Redis session bridge (Display mode)
 └── package.json
 ```
-
----
-
-## Known Limitations
-
-| Limitation | Impact | Workaround |
-|-----------|--------|-----------|
-| MRBD web apps can't access mic | Display mode blocked | Audio mode uses phone mic instead |
-| BT phone call hijack | Phone mic triggers call UI on Display glasses | Use separate device or Audio mode |
-| Irish speech recognition accuracy | ga-IE recognition is limited | English mode more reliable; translate EN→GA |
-| iOS Web Speech API | Fails on Safari/Chrome iOS | MediaRecorder + Cloud Speech fallback |
-| ~2-4s latency per translation | Not real-time simultaneous | Sentence-by-sentence, acceptable for demo |
-
----
-
-## Roadmap
-
-- [ ] Platform mic access for MRBD web apps → re-enable Display mode
-- [ ] Server-Sent Events (replace polling)
-- [ ] Auto language detection
-- [ ] Improved Irish ASR model
-- [ ] Offline phrase book for common expressions
-- [ ] Continuous streaming transcription
 
 ---
 
@@ -131,20 +114,41 @@ gaeilge-live/
 
 | Component | Technology |
 |-----------|-----------|
-| Frontend | Vanilla HTML/CSS/JS |
-| Hosting | Vercel (free tier, HTTPS) |
+| Speech-to-Text | ElevenLabs Scribe v1 (97+ languages) |
 | Translation | Google Cloud Translation API v2 |
-| Speech Recognition | Web Speech API + Google Cloud Speech-to-Text |
-| TTS | Web Speech Synthesis API |
-| Session Bridge | Upstash Redis (Display mode) |
+| Text-to-Speech | ElevenLabs Multilingual v2 |
+| Hosting | Vercel (free tier, HTTPS) |
+| Frontend | Vanilla HTML/CSS/JS |
 | Design | Dark green, Helvetica, responsive |
+| Session Bridge | Upstash Redis (Display mode) |
+
+---
+
+## Known Limitations
+
+| Limitation | Impact | Workaround |
+|-----------|--------|-----------|
+| Irish STT accuracy | Some phrases may not transcribe perfectly | Speak clearly, short sentences |
+| ~3-5s latency | Not simultaneous interpretation | Sentence-by-sentence acceptable |
+| iOS autoplay restrictions | Audio requires user tap to unlock | App auto-unlocks on first interaction |
+| Display mode blocked | MRBD web apps can't access mic | Audio mode via phone instead |
+| ElevenLabs 30K chars/mo | Limited on Starter plan | Sufficient for demos + testing |
+
+---
+
+## Roadmap
+
+- [x] ~~Working EN→GA translation with voice~~
+- [x] ~~Working GA→EN translation with ElevenLabs Scribe~~
+- [x] ~~Session history with scroll~~
+- [ ] V2: DAT (Device Access Toolkit) native iOS app
+- [ ] Re-enable Display mode when platform ships mic access
+- [ ] Auto language detection (remove Swap button)
+- [ ] Streaming transcription (lower latency)
+- [ ] Specialized Irish pronunciation model
 
 ---
 
 ## License
 
 MIT
-
----
-
-*Built in 24 hours as a prototype demonstrating Irish language support on Meta smart glasses.*
