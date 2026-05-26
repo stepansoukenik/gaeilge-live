@@ -50,8 +50,9 @@ html, body {
   .mode-btn { font-size: 18px; padding: 18px; }
   .panel-content { font-size: 22px; }
   .glasses-translation, #target-content { font-size: 24px !important; }
-  #controls, #audio-controls { gap: 10px; }
-  .focusable { padding: 10px 16px; font-size: 16px; }
+  #controls, #audio-controls { gap: 8px; padding: 10px 12px; }
+  .focusable { padding: 10px 14px; font-size: 14px; min-width: auto; }
+  .audio-btn { flex: 1; min-width: 0; text-align: center; }
   .numpad-key { width: 80px; height: 50px; font-size: 24px; }
   #numpad-grid { width: 270px; gap: 8px; }
 }
@@ -222,8 +223,9 @@ html, body {
 #controls, #audio-controls {
   display: flex;
   justify-content: center;
-  gap: 14px;
-  padding: 14px 0;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 14px 16px;
 }
 
 .focusable {
