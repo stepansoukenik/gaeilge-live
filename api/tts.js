@@ -1,6 +1,6 @@
-// api/tts.js — Google Cloud Text-to-Speech
-// Returns audio as base64 MP3 for playback via <audio> element
-// Routes properly through Bluetooth to glasses speakers
+// api/tts.js — Text-to-Speech
+// Primary: ElevenLabs (natural voices, Irish support)
+// Fallback: Google Cloud TTS
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -11,61 +11,101 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   const { text, lang } = req.body || {};
+  if (!text) return res.status(400).json({ error: "Missing text" });
 
-  if (!text) {
-    return res.status(400).json({ error: "Missing text" });
+  // Try ElevenLabs first, fall back to Google
+  const elevenLabsKey = process.env.ELEVENLABS_API_KEY;
+  if (elevenLabsKey) {
+    try {
+      const audio = await elevenLabsTTS(text, lang, elevenLabsKey);
+      return res.status(200).json({ audio, format: "audio/mp3" });
+    } catch (err) {
+      console.error("ElevenLabs failed, trying Google:", err.message);
+    }
   }
 
-  const apiKey = process.env.GOOGLE_TRANSLATE_API_KEY;
-  if (!apiKey) {
-    return res.status(500).json({ error: "Google API key not configured" });
+  // Fallback: Google Cloud TTS
+  const googleKey = process.env.GOOGLE_TRANSLATE_API_KEY;
+  if (googleKey) {
+    try {
+      const audio = await googleTTS(text, lang, googleKey);
+      return res.status(200).json({ audio, format: "audio/mp3" });
+    } catch (err) {
+      return res.status(500).json({ error: "TTS failed", detail: err.message });
+    }
   }
 
-  // Map our language codes to Google TTS language codes
-  const langMap = {
-    "en-GB": { languageCode: "en-GB", name: "en-GB-Standard-A" },
-    "en-US": { languageCode: "en-US", name: "en-US-Standard-C" },
-    "ga-IE": { languageCode: "en-GB", name: "en-GB-Standard-A" }, // Irish TTS not available, use English
-    // Note: Google Cloud TTS doesn't support Irish (ga-IE) natively
-    // For Irish output, we fall back to English voice reading Irish text
+  return res.status(500).json({ error: "No TTS API key configured. Set ELEVENLABS_API_KEY or GOOGLE_TRANSLATE_API_KEY." });
+}
+
+// --- ElevenLabs TTS ---
+async function elevenLabsTTS(text, lang, apiKey) {
+  // Voice IDs — pick natural-sounding voices
+  // You can change these to any ElevenLabs voice ID
+  const voices = {
+    "en-GB": "21m00Tcm4TlvDq8ikWAM",  // Rachel (English, warm)
+    "en-US": "21m00Tcm4TlvDq8ikWAM",  // Rachel
+    "ga-IE": "21m00Tcm4TlvDq8ikWAM",  // Use English voice for Irish text
   };
 
-  const voiceConfig = langMap[lang] || langMap["en-GB"];
+  const voiceId = voices[lang] || voices["en-GB"];
+  const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
 
-  try {
-    const url = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "xi-api-key": apiKey,
+    },
+    body: JSON.stringify({
+      text: text,
+      model_id: "eleven_multilingual_v2",  // Supports Irish!
+      voice_settings: {
+        stability: 0.5,
+        similarity_boost: 0.75,
+        style: 0.0,
+        use_speaker_boost: true,
+      },
+    }),
+  });
 
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        input: { text: text },
-        voice: {
-          languageCode: voiceConfig.languageCode,
-          name: voiceConfig.name,
-        },
-        audioConfig: {
-          audioEncoding: "MP3",
-          speakingRate: 0.9,
-          pitch: 0,
-        },
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`TTS API HTTP ${response.status}: ${errText}`);
-    }
-
-    const data = await response.json();
-    // Returns { audioContent: "base64-encoded-audio" }
-    return res.status(200).json({
-      audio: data.audioContent,
-      format: "audio/mp3",
-    });
-
-  } catch (error) {
-    console.error("TTS error:", error.message);
-    return res.status(500).json({ error: "TTS failed", detail: error.message });
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`ElevenLabs HTTP ${response.status}: ${errText}`);
   }
+
+  // ElevenLabs returns raw audio bytes
+  const arrayBuffer = await response.arrayBuffer();
+  const base64 = Buffer.from(arrayBuffer).toString("base64");
+  return base64;
+}
+
+// --- Google Cloud TTS (fallback) ---
+async function googleTTS(text, lang, apiKey) {
+  const voiceConfig = {
+    "en-GB": { languageCode: "en-GB", name: "en-GB-Standard-A" },
+    "en-US": { languageCode: "en-US", name: "en-US-Standard-C" },
+    "ga-IE": { languageCode: "en-GB", name: "en-GB-Standard-A" },
+  };
+
+  const voice = voiceConfig[lang] || voiceConfig["en-GB"];
+  const url = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      input: { text },
+      voice: { languageCode: voice.languageCode, name: voice.name },
+      audioConfig: { audioEncoding: "MP3", speakingRate: 0.9 },
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Google TTS HTTP ${response.status}: ${errText}`);
+  }
+
+  const data = await response.json();
+  return data.audioContent;
 }
