@@ -334,10 +334,9 @@
           if (!resp.ok) throw new Error("Speech API error");
           const data = await resp.json();
           if (data.transcript && data.transcript.trim()) {
-            els.sourceText.textContent = truncate(data.transcript);
             translateAndSpeak(data.transcript);
           } else {
-            els.sourceText.textContent = "No speech detected";
+            // Silent — don't overwrite history for empty results
           }
         } catch (err) {
           els.sourceText.textContent = "⚠ Recognition failed";
@@ -350,7 +349,6 @@
 
     // Translate + speak aloud
     async function translateAndSpeak(text) {
-      els.targetText.textContent = "…";
       try {
         const [from, to] = state.direction === "ga-en" ? ["ga", "en"] : ["en", "ga"];
         const resp = await fetch(CONFIG.translateEndpoint, {
@@ -361,7 +359,10 @@
         if (!resp.ok) throw new Error("Failed");
         const data = await resp.json();
         const translation = data.translation || "";
-        els.targetText.textContent = truncate(translation);
+        
+        // Append to history (don't replace)
+        appendToPanel(els.sourceText, text, "source");
+        appendToPanel(els.targetText, translation, "target");
 
         // Speak through glasses speakers (Bluetooth audio)
         speakText(translation, state.direction === "ga-en" ? "en-GB" : "ga-IE");
@@ -409,6 +410,15 @@
     document.getElementById("btn-audio-listen").addEventListener("click", () => state.isListening ? stopAudioListening() : startAudioListening());
     document.getElementById("btn-audio-swap").addEventListener("click", swapAudioLangs);
     document.getElementById("btn-audio-stop").addEventListener("click", stopAudioListening);
+    
+    // Clear button
+    const clearBtn = document.getElementById("btn-audio-clear");
+    if (clearBtn) {
+      clearBtn.addEventListener("click", () => {
+        stopAudioListening();
+        clearHistory();
+      });
+    }
 
     // D-pad for audio mode
     window.handleAudioKeys = function(event) {
@@ -579,7 +589,31 @@
   }
 
   // --- Utilities ---
-  function truncate(text) { return text.length <= CONFIG.maxDisplayChars ? text : text.slice(0, CONFIG.maxDisplayChars) + "…"; }
+  function truncate(text) { return text; } // No truncation — show full text
+  
+  function appendToPanel(el, text, type) {
+    // Append a new line to the panel, keeping history
+    const entry = document.createElement("div");
+    entry.className = "history-entry " + (type === "target" ? "history-target" : "history-source");
+    entry.textContent = text;
+    el.appendChild(entry);
+    // Auto-scroll to bottom
+    el.scrollTop = el.scrollHeight;
+  }
+  
+  function clearHistory() {
+    const panels = document.querySelectorAll(".panel-content");
+    panels.forEach(p => {
+      // Remove all history entries
+      p.querySelectorAll(".history-entry").forEach(e => e.remove());
+    });
+    if (document.getElementById("audio-source-text")) {
+      document.getElementById("audio-source-text").textContent = "Tap to start listening";
+    }
+    if (document.getElementById("audio-target-text")) {
+      document.getElementById("audio-target-text").textContent = "—";
+    }
+  }
   function getSupportedMimeType() {
     for (const t of ["audio/webm;codecs=opus","audio/webm","audio/ogg;codecs=opus","audio/mp4"]) { if (MediaRecorder.isTypeSupported(t)) return t; }
     return "audio/webm";
@@ -587,4 +621,3 @@
   async function blobToBase64(blob) { return new Promise(r => { const fr = new FileReader(); fr.onloadend = () => r(fr.result.split(",")[1]); fr.readAsDataURL(blob); }); }
 
 })();
-
