@@ -24,24 +24,48 @@
     ttsUnlocked = true;
   }
 
-  // Robust speak function for iOS
-  function speakText(text, lang) {
-    if (!text || !window.speechSynthesis) return;
-    // iOS workaround: cancel + short delay before speaking
-    speechSynthesis.cancel();
-    setTimeout(() => {
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = lang || "en-GB";
-      utterance.rate = 0.9;
-      utterance.volume = 1.0;
-      // iOS sometimes needs voices to be loaded first
-      const voices = speechSynthesis.getVoices();
-      if (voices.length > 0) {
-        const match = voices.find(v => v.lang.startsWith(lang.split("-")[0]));
-        if (match) utterance.voice = match;
+  // TTS via Google Cloud + <audio> element (works on iOS + Bluetooth)
+  let audioEl = null;
+
+  async function speakText(text, lang) {
+    if (!text) return;
+
+    try {
+      const resp = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, lang: lang || "en-GB" }),
+      });
+
+      if (!resp.ok) {
+        // Fallback to Web Speech Synthesis if TTS API fails
+        if (window.speechSynthesis) {
+          speechSynthesis.cancel();
+          const u = new SpeechSynthesisUtterance(text);
+          u.lang = lang || "en-GB";
+          u.rate = 0.9;
+          speechSynthesis.speak(u);
+        }
+        return;
       }
-      speechSynthesis.speak(utterance);
-    }, 100);
+
+      const data = await resp.json();
+      if (data.audio) {
+        // Play via <audio> element — routes through Bluetooth properly
+        if (audioEl) { audioEl.pause(); audioEl.remove(); }
+        audioEl = new Audio("data:audio/mp3;base64," + data.audio);
+        audioEl.volume = 1.0;
+        audioEl.play().catch(e => console.warn("Audio play blocked:", e));
+      }
+    } catch (err) {
+      console.warn("TTS error, falling back:", err);
+      // Fallback
+      if (window.speechSynthesis) {
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = lang || "en-GB";
+        speechSynthesis.speak(u);
+      }
+    }
   }
 
   // Unlock on any user interaction (tap, click, keypress)
