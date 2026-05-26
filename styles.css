@@ -347,6 +347,30 @@ html, body {
   padding: 16px;
 }
 
+
+/* --- Disabled/Coming Soon buttons --- */
+.focusable.disabled, .focusable:disabled {
+  opacity: 0.4;
+  border-color: #333;
+  color: #666;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+  background: #0a1a0a;
+}
+
+.focusable.disabled .btn-desc {
+  color: #555;
+  font-style: italic;
+}
+
+.focusable.disabled:focus, .focusable.disabled.active {
+  border-color: #333;
+  background: #0a1a0a;
+  box-shadow: none;
+  transform: none;
+}
+
 /* --- Scrollbar --- */
 ::-webkit-scrollbar { width: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
