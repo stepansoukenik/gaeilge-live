@@ -197,17 +197,19 @@ html, body {
 }
 
 .panel-content {
-  font-size: 26px;
+  font-size: 18px;
   font-weight: 400;
-  line-height: 1.3;
+  line-height: 1.4;
   word-wrap: break-word;
   color: #E8F5E9;
+  overflow-y: auto;
+  max-height: 180px;
 }
 
 .glasses-translation, #target-content, #audio-target-text {
   color: #fff !important;
-  font-weight: 600 !important;
-  font-size: 28px !important;
+  font-weight: 500 !important;
+  font-size: 18px !important;
 }
 
 #divider, #glasses-divider, .divider-line {
@@ -369,6 +371,28 @@ html, body {
   background: #0a1a0a;
   box-shadow: none;
   transform: none;
+}
+
+
+/* --- History entries --- */
+.history-entry {
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(76, 175, 80, 0.15);
+  font-size: 17px;
+  line-height: 1.4;
+}
+
+.history-entry:last-child {
+  border-bottom: none;
+}
+
+.history-source {
+  color: #C8E6C9;
+}
+
+.history-target {
+  color: #fff;
+  font-weight: 500;
 }
 
 /* --- Scrollbar --- */
