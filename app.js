@@ -1,6 +1,6 @@
-// Gaeilge Live — Phone ↔ Glasses Bridge v3
-// Phone mode: Web Speech API → falls back to MediaRecorder + Cloud Speech
-// Glasses mode: Polls session, displays on HUD
+// Gaeilge Live v4 — Display Mode + Audio-Only Mode
+// Display: phone↔glasses bridge (for Ray-Ban Display)
+// Audio: single device, mic→translate→TTS through glasses speakers (for Ray-Ban Meta)
 
 (function() {
   "use strict";
@@ -15,8 +15,9 @@
   };
 
   let state = {
-    mode: null,
-    screen: "mode-select",
+    device: null,      // "display" or "audio"
+    mode: null,        // "phone", "glasses" (display mode only)
+    screen: "device-select",
     sessionId: null,
     direction: "ga-en",
     isListening: false,
@@ -35,13 +36,40 @@
   // --- Screen management ---
   function showScreen(name) {
     state.screen = name;
-    document.getElementById("mode-select").classList.toggle("hidden", name !== "mode-select");
-    document.getElementById("numpad-screen").classList.toggle("hidden", name !== "numpad");
-    document.getElementById("phone-mode").classList.toggle("hidden", name !== "phone");
-    document.getElementById("glasses-mode").classList.toggle("hidden", name !== "glasses");
+    const screens = ["device-select","mode-select","numpad-screen","phone-mode","glasses-mode","audio-mode"];
+    screens.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.classList.toggle("hidden", id !== name);
+    });
   }
 
-  // --- Mode Selection ---
+  // ===========================
+  // DEVICE SELECTOR
+  // ===========================
+  const deviceBtns = document.querySelectorAll("#device-select .mode-btn");
+  let deviceFocusIndex = 0;
+
+  function selectDevice(device) {
+    state.device = device;
+    if (device === "display") {
+      showScreen("mode-select");
+    } else {
+      showScreen("audio-mode");
+      initAudioMode();
+    }
+  }
+
+  deviceBtns.forEach(btn => {
+    btn.addEventListener("click", () => selectDevice(btn.dataset.device));
+    btn.addEventListener("focus", () => {
+      deviceFocusIndex = [...deviceBtns].indexOf(btn);
+      deviceBtns.forEach((b, i) => b.classList.toggle("active", i === deviceFocusIndex));
+    });
+  });
+
+  // ===========================
+  // DISPLAY MODE SELECTOR
+  // ===========================
   const modeBtns = document.querySelectorAll("#mode-select .mode-btn");
   let modeFocusIndex = 0;
 
@@ -50,19 +78,23 @@
     if (mode === "phone") {
       state.sessionId = generateSessionId();
       document.getElementById("session-code-display").textContent = state.sessionId;
-      showScreen("phone");
+      showScreen("phone-mode");
       initPhone();
     } else {
       state.numpadDigits = [];
       state.numpadFocusIndex = 4;
       updateNumpadDisplay();
       updateNumpadFocus();
-      showScreen("numpad");
+      showScreen("numpad-screen");
     }
   }
 
   modeBtns.forEach(btn => {
     btn.addEventListener("click", () => selectMode(btn.dataset.mode));
+    btn.addEventListener("focus", () => {
+      modeFocusIndex = [...modeBtns].indexOf(btn);
+      modeBtns.forEach((b, i) => b.classList.toggle("active", i === modeFocusIndex));
+    });
   });
 
   // ===========================
@@ -83,27 +115,23 @@
   }
 
   function numpadPress(digit) {
-    if (digit === "del") {
-      state.numpadDigits.pop();
-    } else if (digit === "ok") {
-      if (state.numpadDigits.length === 4) {
-        state.sessionId = state.numpadDigits.join("");
-        document.getElementById("glasses-session").textContent = state.sessionId;
-        showScreen("glasses");
-        initGlasses();
-      }
+    if (digit === "del") { state.numpadDigits.pop(); }
+    else if (digit === "ok") {
+      if (state.numpadDigits.length === 4) connectGlasses();
     } else if (state.numpadDigits.length < 4) {
       state.numpadDigits.push(digit);
     }
     updateNumpadDisplay();
     if (state.numpadDigits.length === 4 && digit !== "ok" && digit !== "del") {
-      setTimeout(() => {
-        state.sessionId = state.numpadDigits.join("");
-        document.getElementById("glasses-session").textContent = state.sessionId;
-        showScreen("glasses");
-        initGlasses();
-      }, 400);
+      setTimeout(connectGlasses, 400);
     }
+  }
+
+  function connectGlasses() {
+    state.sessionId = state.numpadDigits.join("");
+    document.getElementById("glasses-session").textContent = state.sessionId;
+    showScreen("glasses-mode");
+    initGlasses();
   }
 
   numpadKeys.forEach(key => {
@@ -115,34 +143,29 @@
   // ===========================
   document.addEventListener("keydown", (event) => {
     switch (state.screen) {
-      case "mode-select": handleModeKeys(event); break;
-      case "numpad": handleNumpadKeys(event); break;
-      case "phone": handlePhoneKeys(event); break;
+      case "device-select": handleListKeys(event, deviceBtns, deviceFocusIndex, (i) => { deviceFocusIndex = i; }, selectDevice, "device"); break;
+      case "mode-select": handleListKeys(event, modeBtns, modeFocusIndex, (i) => { modeFocusIndex = i; }, selectMode, "mode"); break;
+      case "numpad-screen": handleNumpadKeys(event); break;
+      case "phone-mode": if (window.handlePhoneKeys) window.handlePhoneKeys(event); break;
+      case "audio-mode": if (window.handleAudioKeys) window.handleAudioKeys(event); break;
     }
   });
 
-  function handleModeKeys(event) {
+  function handleListKeys(event, btns, currentIndex, setIndex, selectFn, attr) {
     if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
-      modeFocusIndex = 0;
-      modeBtns.forEach((b, i) => b.classList.toggle("active", i === 0));
-      modeBtns[0].focus();
+      currentIndex = 0; setIndex(0);
+      btns.forEach((b, i) => b.classList.toggle("active", i === 0));
+      btns[0].focus();
     } else if (event.key === "ArrowDown" || event.key === "ArrowRight") {
-      modeFocusIndex = 1;
-      modeBtns.forEach((b, i) => b.classList.toggle("active", i === 1));
-      modeBtns[1].focus();
+      currentIndex = 1; setIndex(1);
+      btns.forEach((b, i) => b.classList.toggle("active", i === 1));
+      btns[1].focus();
     } else if (event.key === "Enter" || event.key === " " || event.key === "Return" || event.key === "Select") {
       event.preventDefault();
-      selectMode(modeFocusIndex === 0 ? "phone" : "glasses");
+      const val = btns[currentIndex].dataset[attr];
+      selectFn(val);
     }
   }
-
-  // Also handle focus-based selection (glasses may use focus+click)
-  modeBtns.forEach((btn, i) => {
-    btn.addEventListener("focus", () => {
-      modeFocusIndex = i;
-      modeBtns.forEach((b, j) => b.classList.toggle("active", j === i));
-    });
-  });
 
   function handleNumpadKeys(event) {
     event.preventDefault();
@@ -152,33 +175,32 @@
       case "ArrowLeft": state.numpadFocusIndex = Math.max(0, state.numpadFocusIndex - 1); break;
       case "ArrowDown": if (state.numpadFocusIndex + cols < total) state.numpadFocusIndex += cols; break;
       case "ArrowUp": if (state.numpadFocusIndex - cols >= 0) state.numpadFocusIndex -= cols; break;
-      case "Enter": case " ": numpadPress(numpadKeys[state.numpadFocusIndex].dataset.digit); break;
+      case "Enter": case " ": case "Return": case "Select": numpadPress(numpadKeys[state.numpadFocusIndex].dataset.digit); break;
     }
     updateNumpadFocus();
   }
 
   // ===========================
-  // PHONE MODE (with MediaRecorder fallback)
+  // AUDIO-ONLY MODE (Ray-Ban Meta)
   // ===========================
-  function initPhone() {
+  function initAudioMode() {
     const els = {
-      directionLabel: document.getElementById("direction-label"),
-      micStatus: document.getElementById("mic-status"),
-      sourceContent: document.getElementById("source-content"),
-      targetContent: document.getElementById("target-content"),
-      btnListen: document.getElementById("btn-listen"),
-      langSource: document.getElementById("lang-source"),
-      langTarget: document.getElementById("lang-target"),
+      micStatus: document.getElementById("audio-mic-status"),
+      sourceText: document.getElementById("audio-source-text"),
+      targetText: document.getElementById("audio-target-text"),
+      btnListen: document.getElementById("btn-audio-listen"),
+      dirLabel: document.getElementById("audio-direction"),
+      langSource: document.getElementById("audio-lang-source"),
+      langTarget: document.getElementById("audio-lang-target"),
     };
-    const focusables = document.querySelectorAll("#phone-mode .focusable");
-    state.focusIndex = 0;
+    const focusables = document.querySelectorAll("#audio-mode .audio-btn");
+    let audioFocusIndex = 0;
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition = null;
     let audioStream = null;
     let mediaRecorder = null;
 
-    // Try Web Speech API
     if (SpeechRecognition) {
       recognition = new SpeechRecognition();
       recognition.continuous = true;
@@ -191,63 +213,50 @@
           if (event.results[i].isFinal) final += t;
           else interim += t;
         }
-        els.sourceContent.textContent = truncate(final || interim);
-        if (final) translateAndPush(final);
+        els.sourceText.textContent = truncate(final || interim);
+        if (final) translateAndSpeak(final);
       };
 
       recognition.onerror = (event) => {
-        console.warn("Web Speech failed:", event.error);
-        // Fall back to MediaRecorder
-        if (event.error === "service-not-allowed" || event.error === "not-allowed" ||
-            event.error === "network" || event.error === "language-not-supported") {
+        if (event.error === "service-not-allowed" || event.error === "not-allowed" || event.error === "network") {
           state.useMediaRecorder = true;
-          if (state.isListening) {
-            startMediaRecorder();
-          }
+          if (state.isListening) startAudioMediaRecorder();
         } else {
-          els.sourceContent.textContent = "Error: " + event.error;
-          stopListening();
+          els.sourceText.textContent = "Error: " + event.error;
+          stopAudioListening();
         }
       };
 
       recognition.onend = () => {
-        if (state.isListening && !state.useMediaRecorder) {
-          try { recognition.start(); } catch(e) {}
-        }
+        if (state.isListening && !state.useMediaRecorder) try { recognition.start(); } catch(e) {}
       };
     } else {
       state.useMediaRecorder = true;
     }
 
-    // --- MediaRecorder approach ---
-    async function startMediaRecorder() {
+    // MediaRecorder fallback
+    async function startAudioMediaRecorder() {
       try {
         audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       } catch (err) {
-        els.sourceContent.textContent = "Mic denied — check permissions";
-        stopListening();
+        els.sourceText.textContent = "Mic denied — check permissions";
+        stopAudioListening();
         return;
       }
-      els.sourceContent.textContent = "Listening…";
-      recordNextChunk();
+      els.sourceText.textContent = "Listening…";
+      recordAudioChunk();
     }
 
-    function recordNextChunk() {
+    function recordAudioChunk() {
       if (!state.isListening || !audioStream) return;
-
       const chunks = [];
       mediaRecorder = new MediaRecorder(audioStream, { mimeType: getSupportedMimeType() });
-
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunks.push(e.data);
-      };
-
+      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
       mediaRecorder.onstop = async () => {
         if (chunks.length === 0 || !state.isListening) return;
         const blob = new Blob(chunks, { type: mediaRecorder.mimeType });
         const base64 = await blobToBase64(blob);
-
-        els.sourceContent.textContent = "Processing…";
+        els.sourceText.textContent = "Processing…";
         try {
           const langCode = state.direction === "ga-en" ? "ga-IE" : "en-US";
           const resp = await fetch(CONFIG.speechEndpoint, {
@@ -258,27 +267,23 @@
           if (!resp.ok) throw new Error("Speech API error");
           const data = await resp.json();
           if (data.transcript && data.transcript.trim()) {
-            els.sourceContent.textContent = truncate(data.transcript);
-            translateAndPush(data.transcript);
+            els.sourceText.textContent = truncate(data.transcript);
+            translateAndSpeak(data.transcript);
           } else {
-            els.sourceContent.textContent = "No speech detected — try again";
+            els.sourceText.textContent = "No speech detected";
           }
         } catch (err) {
-          els.sourceContent.textContent = "⚠ Recognition failed";
+          els.sourceText.textContent = "⚠ Recognition failed";
         }
-        // Next chunk
-        if (state.isListening) setTimeout(recordNextChunk, 500);
+        if (state.isListening) setTimeout(recordAudioChunk, 500);
       };
-
       mediaRecorder.start();
-      setTimeout(() => {
-        if (mediaRecorder && mediaRecorder.state === "recording") mediaRecorder.stop();
-      }, CONFIG.recordingDurationMs);
+      setTimeout(() => { if (mediaRecorder && mediaRecorder.state === "recording") mediaRecorder.stop(); }, CONFIG.recordingDurationMs);
     }
 
-    // --- Translate + push to glasses ---
-    async function translateAndPush(text) {
-      els.targetContent.textContent = "…";
+    // Translate + speak aloud
+    async function translateAndSpeak(text) {
+      els.targetText.textContent = "…";
       try {
         const [from, to] = state.direction === "ga-en" ? ["ga", "en"] : ["en", "ga"];
         const resp = await fetch(CONFIG.translateEndpoint, {
@@ -288,40 +293,38 @@
         });
         if (!resp.ok) throw new Error("Failed");
         const data = await resp.json();
-        els.targetContent.textContent = truncate(data.translation || "");
-        // Push to glasses session
-        await fetch(CONFIG.sessionEndpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            sessionId: state.sessionId,
-            source: text,
-            translation: data.translation,
-            direction: state.direction,
-          }),
-        });
+        const translation = data.translation || "";
+        els.targetText.textContent = truncate(translation);
+
+        // Speak through glasses speakers (Bluetooth audio)
+        if (translation && window.speechSynthesis) {
+          const utterance = new SpeechSynthesisUtterance(translation);
+          utterance.lang = state.direction === "ga-en" ? "en-GB" : "ga-IE";
+          utterance.rate = 0.9;
+          utterance.volume = 1.0;
+          speechSynthesis.cancel();
+          speechSynthesis.speak(utterance);
+        }
       } catch (err) {
-        els.targetContent.textContent = "⚠ Translation error";
+        els.targetText.textContent = "⚠ Translation error";
       }
     }
 
-    // --- Start/Stop ---
-    function startListening() {
+    function startAudioListening() {
       state.isListening = true;
       els.micStatus.textContent = "🎙️ ON";
       els.micStatus.className = "mic-on";
-      els.sourceContent.textContent = "Listening…";
-      els.btnListen.textContent = "■ Stop";
-
+      els.sourceText.textContent = "Listening…";
+      els.btnListen.textContent = "● Listening…";
       if (!state.useMediaRecorder && recognition) {
         recognition.lang = state.direction === "ga-en" ? "ga-IE" : "en-US";
-        try { recognition.start(); } catch(e) { startMediaRecorder(); }
+        try { recognition.start(); } catch(e) { startAudioMediaRecorder(); }
       } else {
-        startMediaRecorder();
+        startAudioMediaRecorder();
       }
     }
 
-    function stopListening() {
+    function stopAudioListening() {
       state.isListening = false;
       els.micStatus.textContent = "🎙️ OFF";
       els.micStatus.className = "mic-off";
@@ -329,48 +332,170 @@
       if (recognition && !state.useMediaRecorder) try { recognition.stop(); } catch(e) {}
       if (mediaRecorder && mediaRecorder.state === "recording") mediaRecorder.stop();
       if (audioStream) { audioStream.getTracks().forEach(t => t.stop()); audioStream = null; }
+      if (window.speechSynthesis) speechSynthesis.cancel();
     }
 
-    function swapLanguages() {
-      stopListening();
+    function swapAudioLangs() {
+      stopAudioListening();
+      state.direction = state.direction === "ga-en" ? "en-ga" : "ga-en";
+      els.dirLabel.textContent = state.direction === "ga-en" ? "GA → EN" : "EN → GA";
+      els.langSource.textContent = state.direction === "ga-en" ? "🇮🇪 Gaeilge" : "🇬🇧 English";
+      els.langTarget.textContent = state.direction === "ga-en" ? "🇬🇧 English" : "🇮🇪 Gaeilge";
+      els.sourceText.textContent = "Tap to start listening";
+      els.targetText.textContent = "—";
+    }
+
+    // Click handlers
+    document.getElementById("btn-audio-listen").addEventListener("click", () => state.isListening ? stopAudioListening() : startAudioListening());
+    document.getElementById("btn-audio-swap").addEventListener("click", swapAudioLangs);
+    document.getElementById("btn-audio-stop").addEventListener("click", stopAudioListening);
+
+    // D-pad for audio mode
+    window.handleAudioKeys = function(event) {
+      switch (event.key) {
+        case "ArrowLeft": audioFocusIndex = Math.max(0, audioFocusIndex - 1); break;
+        case "ArrowRight": audioFocusIndex = Math.min(focusables.length - 1, audioFocusIndex + 1); break;
+        case "Enter": case " ": case "Return": case "Select":
+          event.preventDefault();
+          focusables[audioFocusIndex].click();
+          break;
+      }
+      focusables.forEach((el, i) => el.classList.toggle("active", i === audioFocusIndex));
+    };
+  }
+
+  // ===========================
+  // DISPLAY: PHONE MODE
+  // ===========================
+  function initPhone() {
+    const els = {
+      directionLabel: document.getElementById("direction-label"),
+      micStatus: document.getElementById("mic-status"),
+      sourceContent: document.getElementById("source-content"),
+      targetContent: document.getElementById("target-content"),
+      btnListen: document.getElementById("btn-listen"),
+      langSource: document.getElementById("lang-source"),
+      langTarget: document.getElementById("lang-target"),
+    };
+    const focusables = document.querySelectorAll("#phone-mode .focusable");
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition = null;
+    let audioStream = null;
+    let mediaRecorder = null;
+    let phoneUseMediaRecorder = false;
+
+    if (SpeechRecognition) {
+      recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.onresult = (event) => {
+        let final = "", interim = "";
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const t = event.results[i][0].transcript;
+          if (event.results[i].isFinal) final += t; else interim += t;
+        }
+        els.sourceContent.textContent = truncate(final || interim);
+        if (final) phoneTranslateAndPush(final);
+      };
+      recognition.onerror = (event) => {
+        if (["service-not-allowed","not-allowed","network","language-not-supported"].includes(event.error)) {
+          phoneUseMediaRecorder = true;
+          if (state.isListening) phoneStartMediaRecorder();
+        } else { els.sourceContent.textContent = "Error: " + event.error; phoneStopListening(); }
+      };
+      recognition.onend = () => { if (state.isListening && !phoneUseMediaRecorder) try { recognition.start(); } catch(e) {} };
+    } else { phoneUseMediaRecorder = true; }
+
+    async function phoneStartMediaRecorder() {
+      try { audioStream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+      catch (err) { els.sourceContent.textContent = "Mic denied"; phoneStopListening(); return; }
+      els.sourceContent.textContent = "Listening…";
+      phoneRecordChunk();
+    }
+
+    function phoneRecordChunk() {
+      if (!state.isListening || !audioStream) return;
+      const chunks = [];
+      mediaRecorder = new MediaRecorder(audioStream, { mimeType: getSupportedMimeType() });
+      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+      mediaRecorder.onstop = async () => {
+        if (!chunks.length || !state.isListening) return;
+        const blob = new Blob(chunks, { type: mediaRecorder.mimeType });
+        const base64 = await blobToBase64(blob);
+        els.sourceContent.textContent = "Processing…";
+        try {
+          const langCode = state.direction === "ga-en" ? "ga-IE" : "en-US";
+          const resp = await fetch(CONFIG.speechEndpoint, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({audio:base64,language:langCode,mimeType:mediaRecorder.mimeType}) });
+          if (!resp.ok) throw new Error("err");
+          const data = await resp.json();
+          if (data.transcript?.trim()) { els.sourceContent.textContent = truncate(data.transcript); phoneTranslateAndPush(data.transcript); }
+          else { els.sourceContent.textContent = "No speech detected"; }
+        } catch(e) { els.sourceContent.textContent = "⚠ Recognition failed"; }
+        if (state.isListening) setTimeout(phoneRecordChunk, 500);
+      };
+      mediaRecorder.start();
+      setTimeout(() => { if (mediaRecorder?.state === "recording") mediaRecorder.stop(); }, CONFIG.recordingDurationMs);
+    }
+
+    async function phoneTranslateAndPush(text) {
+      els.targetContent.textContent = "…";
+      try {
+        const [from,to] = state.direction === "ga-en" ? ["ga","en"] : ["en","ga"];
+        const resp = await fetch(CONFIG.translateEndpoint, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({text,from,to}) });
+        if (!resp.ok) throw new Error("err");
+        const data = await resp.json();
+        els.targetContent.textContent = truncate(data.translation || "");
+        await fetch(CONFIG.sessionEndpoint, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({sessionId:state.sessionId,source:text,translation:data.translation,direction:state.direction}) });
+      } catch(e) { els.targetContent.textContent = "⚠ Error"; }
+    }
+
+    function phoneStartListening() {
+      state.isListening = true;
+      els.micStatus.textContent = "🎙️ ON"; els.micStatus.className = "mic-on";
+      els.sourceContent.textContent = "Listening…"; els.btnListen.textContent = "■ Stop";
+      if (!phoneUseMediaRecorder && recognition) { recognition.lang = state.direction === "ga-en" ? "ga-IE" : "en-US"; try { recognition.start(); } catch(e) { phoneStartMediaRecorder(); } }
+      else { phoneStartMediaRecorder(); }
+    }
+
+    function phoneStopListening() {
+      state.isListening = false;
+      els.micStatus.textContent = "🎙️ OFF"; els.micStatus.className = "mic-off";
+      els.btnListen.textContent = "● Listen";
+      if (recognition && !phoneUseMediaRecorder) try { recognition.stop(); } catch(e) {}
+      if (mediaRecorder?.state === "recording") mediaRecorder.stop();
+      if (audioStream) { audioStream.getTracks().forEach(t => t.stop()); audioStream = null; }
+    }
+
+    function phoneSwap() {
+      phoneStopListening();
       state.direction = state.direction === "ga-en" ? "en-ga" : "ga-en";
       els.directionLabel.textContent = state.direction === "ga-en" ? "GA → EN" : "EN → GA";
       els.langSource.textContent = state.direction === "ga-en" ? "🇮🇪 Gaeilge" : "🇬🇧 English";
       els.langTarget.textContent = state.direction === "ga-en" ? "🇬🇧 English" : "🇮🇪 Gaeilge";
-      els.sourceContent.textContent = "Press ● to start";
-      els.targetContent.textContent = "—";
+      els.sourceContent.textContent = "Press ● to start"; els.targetContent.textContent = "—";
     }
 
-    function clearAll() {
-      stopListening();
-      els.sourceContent.textContent = "Press ● to start";
-      els.targetContent.textContent = "—";
-    }
+    function phoneClear() { phoneStopListening(); els.sourceContent.textContent = "Press ● to start"; els.targetContent.textContent = "—"; }
 
-    // D-pad
+    document.getElementById("btn-listen").addEventListener("click", () => state.isListening ? phoneStopListening() : phoneStartListening());
+    document.getElementById("btn-swap").addEventListener("click", phoneSwap);
+    document.getElementById("btn-clear").addEventListener("click", phoneClear);
+
     window.handlePhoneKeys = function(event) {
+      let fi = state.focusIndex;
       switch (event.key) {
-        case "ArrowLeft": state.focusIndex = Math.max(0, state.focusIndex - 1); break;
-        case "ArrowRight": state.focusIndex = Math.min(focusables.length - 1, state.focusIndex + 1); break;
-        case "Enter": case " ":
-          event.preventDefault();
-          const action = focusables[state.focusIndex].dataset.action;
-          if (action === "listen") state.isListening ? stopListening() : startListening();
-          if (action === "swap") swapLanguages();
-          if (action === "clear") clearAll();
-          break;
+        case "ArrowLeft": fi = Math.max(0, fi - 1); break;
+        case "ArrowRight": fi = Math.min(focusables.length - 1, fi + 1); break;
+        case "Enter": case " ": case "Return": case "Select": event.preventDefault(); focusables[fi].click(); break;
       }
-      focusables.forEach((el, i) => el.classList.toggle("active", i === state.focusIndex));
+      state.focusIndex = fi;
+      focusables.forEach((el, i) => el.classList.toggle("active", i === fi));
     };
-
-    // Click handlers
-    document.getElementById("btn-listen").addEventListener("click", () => state.isListening ? stopListening() : startListening());
-    document.getElementById("btn-swap").addEventListener("click", swapLanguages);
-    document.getElementById("btn-clear").addEventListener("click", clearAll);
   }
 
   // ===========================
-  // GLASSES MODE
+  // DISPLAY: GLASSES MODE
   // ===========================
   function initGlasses() {
     const srcEl = document.getElementById("glasses-source-text");
@@ -387,14 +512,10 @@
           srcEl.textContent = truncate(data.source || "");
           tgtEl.textContent = truncate(data.translation || "—");
           dirEl.textContent = data.direction === "ga-en" ? "GA → EN" : "EN → GA";
-          // Speak the translation aloud through glasses speakers
           if (data.translation && window.speechSynthesis) {
-            const utterance = new SpeechSynthesisUtterance(data.translation);
-            utterance.lang = data.direction === "ga-en" ? "en-GB" : "ga-IE";
-            utterance.rate = 0.9;
-            utterance.volume = 1.0;
-            speechSynthesis.cancel(); // Stop any previous speech
-            speechSynthesis.speak(utterance);
+            const u = new SpeechSynthesisUtterance(data.translation);
+            u.lang = data.direction === "ga-en" ? "en-GB" : "ga-IE";
+            u.rate = 0.9; speechSynthesis.cancel(); speechSynthesis.speak(u);
           }
         }
       } catch (err) {}
@@ -402,24 +523,11 @@
   }
 
   // --- Utilities ---
-  function truncate(text) {
-    return text.length <= CONFIG.maxDisplayChars ? text : text.slice(0, CONFIG.maxDisplayChars) + "…";
-  }
-
+  function truncate(text) { return text.length <= CONFIG.maxDisplayChars ? text : text.slice(0, CONFIG.maxDisplayChars) + "…"; }
   function getSupportedMimeType() {
-    const types = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"];
-    for (const type of types) {
-      if (MediaRecorder.isTypeSupported(type)) return type;
-    }
+    for (const t of ["audio/webm;codecs=opus","audio/webm","audio/ogg;codecs=opus","audio/mp4"]) { if (MediaRecorder.isTypeSupported(t)) return t; }
     return "audio/webm";
   }
-
-  async function blobToBase64(blob) {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result.split(",")[1]);
-      reader.readAsDataURL(blob);
-    });
-  }
+  async function blobToBase64(blob) { return new Promise(r => { const fr = new FileReader(); fr.onloadend = () => r(fr.result.split(",")[1]); fr.readAsDataURL(blob); }); }
 
 })();
