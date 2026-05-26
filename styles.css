@@ -1,5 +1,5 @@
-/* Gaeilge Live — Meta Ray-Ban Display Translator */
-/* Green theme | Helvetica | D-pad optimized */
+/* Gaeilge Live — Complete Styles */
+/* Green theme | Helvetica | Responsive | D-pad */
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -17,7 +17,6 @@ html, body {
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding-top: 0;
 }
 
 #app {
@@ -32,11 +31,11 @@ html, body {
   margin: 0 auto;
 }
 
-/* Desktop: center-top alignment */
+.hidden { display: none !important; }
+
+/* Desktop: center-top */
 @media (min-width: 601px) {
-  html, body {
-    padding-top: 40px;
-  }
+  html, body { padding-top: 40px; }
   #app {
     border-radius: 12px;
     border: 1px solid #2E7D32;
@@ -44,24 +43,19 @@ html, body {
   }
 }
 
-/* Mobile: fill the screen */
+/* Mobile: fill screen */
 @media (max-width: 600px) {
-  #app {
-    max-height: 100vh;
-    max-height: -webkit-fill-available;
-    border-radius: 0;
-  }
+  #app { max-height: 100vh; max-height: -webkit-fill-available; border-radius: 0; }
   .mode-title { font-size: 30px; }
   .mode-btn { font-size: 18px; padding: 18px; }
   .panel-content { font-size: 22px; }
   .glasses-translation, #target-content { font-size: 24px !important; }
-  #controls { gap: 10px; }
+  #controls, #audio-controls { gap: 10px; }
   .focusable { padding: 10px 16px; font-size: 16px; }
   .numpad-key { width: 80px; height: 50px; font-size: 24px; }
   #numpad-grid { width: 270px; gap: 8px; }
 }
 
-/* Small phones */
 @media (max-width: 380px) {
   .mode-title { font-size: 26px; }
   .panel-content { font-size: 20px; }
@@ -70,9 +64,18 @@ html, body {
   #numpad-grid { width: 240px; }
 }
 
-.hidden { display: none !important; }
+/* --- Device Selector --- */
+#device-select {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 20px;
+  padding: 40px;
+}
 
-/* --- Mode Selector --- */
+/* --- Mode Selector (Display mode) --- */
 #mode-select {
   display: flex;
   flex-direction: column;
@@ -83,6 +86,7 @@ html, body {
   padding: 40px;
 }
 
+/* --- Shared Title/Subtitle --- */
 .mode-title {
   font-size: 38px;
   font-weight: 300;
@@ -106,6 +110,14 @@ html, body {
   letter-spacing: 0.5px;
 }
 
+.btn-desc {
+  font-size: 13px;
+  font-weight: 400;
+  color: #81C784;
+  display: block;
+  margin-top: 4px;
+}
+
 .mode-hint {
   font-size: 13px;
   color: #4CAF50;
@@ -113,8 +125,8 @@ html, body {
   letter-spacing: 1px;
 }
 
-/* --- Shared Styles --- */
-#status-bar, #glasses-status-bar {
+/* --- Status Bars --- */
+#status-bar, #glasses-status-bar, #audio-status-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -123,7 +135,7 @@ html, body {
   border-bottom: 1px solid #1B5E20;
 }
 
-#direction-label, #glasses-direction {
+#direction-label, #glasses-direction, #audio-direction {
   font-weight: 600;
   color: #A5D6A7;
   letter-spacing: 1px;
@@ -145,7 +157,7 @@ html, body {
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
 /* --- Translation Panels --- */
-#translation-area, #glasses-display {
+#translation-area, #glasses-display, #audio-display {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -165,12 +177,12 @@ html, body {
   overflow-y: auto;
 }
 
-#source-text, #glasses-source {
+#source-text, #glasses-source, .audio-source-panel {
   background: #0d260d;
   border: 1px solid #2E7D32;
 }
 
-#target-text, #glasses-target {
+#target-text, #glasses-target, .audio-target-panel {
   background: #1a3a1a;
   border: 1px solid #43A047;
 }
@@ -192,20 +204,20 @@ html, body {
   color: #E8F5E9;
 }
 
-.glasses-translation, #target-content {
+.glasses-translation, #target-content, #audio-target-text {
   color: #fff !important;
   font-weight: 600 !important;
   font-size: 28px !important;
 }
 
-#divider, #glasses-divider {
+#divider, #glasses-divider, .divider-line {
   height: 1px;
   background: linear-gradient(90deg, transparent, #4CAF50, transparent);
   margin: 6px 50px;
 }
 
 /* --- Controls --- */
-#controls {
+#controls, #audio-controls {
   display: flex;
   justify-content: center;
   gap: 14px;
@@ -235,8 +247,10 @@ html, body {
   transform: scale(1.05);
 }
 
+.audio-btn { min-width: 100px; }
+
 /* --- Language Bar --- */
-#lang-bar {
+#lang-bar, #audio-lang-bar {
   display: flex;
   justify-content: center;
   align-items: center;
@@ -246,11 +260,20 @@ html, body {
 }
 
 .lang-active { color: #A5D6A7; font-weight: 600; }
-#lang-arrow { color: #4CAF50; font-size: 20px; }
+#lang-arrow, .lang-arrow-audio { color: #4CAF50; font-size: 20px; }
 
 /* --- Glasses Footer --- */
 #glasses-footer { text-align: center; padding: 16px; }
 .glasses-hint { font-size: 14px; color: #66BB6A; letter-spacing: 1px; }
+
+/* --- Audio Mode Hint --- */
+#audio-hint {
+  text-align: center;
+  padding: 8px;
+  font-size: 13px;
+  color: #66BB6A;
+  letter-spacing: 0.5px;
+}
 
 /* --- Number Pad --- */
 #numpad-screen {
@@ -311,90 +334,17 @@ html, body {
   align-items: center;
   justify-content: center;
   padding: 0;
-  font-family: "Helvetica Neue", Helvetica, sans-serif;
 }
 
 .numpad-del { color: #FFAB91; }
 .numpad-ok { color: #A5D6A7; }
 
-
-/* --- Audio Mode (Ray-Ban Meta) --- */
+/* --- Audio Mode --- */
 #audio-mode {
   display: flex;
   flex-direction: column;
   height: 100%;
   padding: 16px;
-}
-
-#audio-status-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 0;
-  border-bottom: 1px solid #1B5E20;
-  margin-bottom: 12px;
-}
-
-#audio-display {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 10px;
-}
-
-.audio-source-panel {
-  background: #0d260d;
-  border: 1px solid #2E7D32;
-}
-
-.audio-target-panel {
-  background: #1a3a1a;
-  border: 1px solid #43A047;
-}
-
-.divider-line {
-  height: 1px;
-  background: linear-gradient(90deg, transparent, #4CAF50, transparent);
-  margin: 6px 50px;
-}
-
-#audio-controls {
-  display: flex;
-  justify-content: center;
-  gap: 14px;
-  padding: 14px 0;
-}
-
-.audio-btn {
-  min-width: 100px;
-}
-
-#audio-lang-bar {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 14px;
-  padding: 8px;
-  font-size: 16px;
-}
-
-.lang-arrow-audio { color: #4CAF50; font-size: 20px; }
-
-#audio-hint {
-  text-align: center;
-  padding: 8px;
-  font-size: 13px;
-  color: #66BB6A;
-  letter-spacing: 0.5px;
-}
-
-.btn-desc {
-  font-size: 13px;
-  font-weight: 400;
-  color: #81C784;
-  display: block;
-  margin-top: 4px;
 }
 
 /* --- Scrollbar --- */
