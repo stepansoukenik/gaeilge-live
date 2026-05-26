@@ -24,8 +24,30 @@
     ttsUnlocked = true;
   }
 
-  // TTS via Google Cloud + <audio> element (works on iOS + Bluetooth)
-  let audioEl = null;
+  // TTS via ElevenLabs + <audio> element (iOS + Bluetooth compatible)
+  // iOS requires audio to be "unlocked" by a user gesture first
+  let audioEl = new Audio();
+  let audioUnlocked = false;
+
+  // Unlock audio on first user interaction
+  function unlockAudio() {
+    if (audioUnlocked) return;
+    // Play a tiny silent clip to unlock the audio context
+    audioEl.src = "data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYoRwMHAAAAAAD/+1DEAAAH8ANX9AAAIXIY6z8xAABMIABgAABMg";
+    audioEl.volume = 0.01;
+    audioEl.play().then(() => {
+      audioEl.pause();
+      audioEl.currentTime = 0;
+      audioEl.volume = 1.0;
+      audioUnlocked = true;
+      console.log("Audio unlocked for iOS");
+    }).catch(() => {});
+  }
+
+  // Unlock on any user interaction
+  ["click", "touchstart", "touchend", "keydown"].forEach(evt => {
+    document.addEventListener(evt, unlockAudio, { once: false });
+  });
 
   async function speakText(text, lang) {
     if (!text) return;
@@ -38,33 +60,19 @@
       });
 
       if (!resp.ok) {
-        // Fallback to Web Speech Synthesis if TTS API fails
-        if (window.speechSynthesis) {
-          speechSynthesis.cancel();
-          const u = new SpeechSynthesisUtterance(text);
-          u.lang = lang || "en-GB";
-          u.rate = 0.9;
-          speechSynthesis.speak(u);
-        }
+        console.warn("TTS API failed:", resp.status);
         return;
       }
 
       const data = await resp.json();
       if (data.audio) {
-        // Play via <audio> element — routes through Bluetooth properly
-        if (audioEl) { audioEl.pause(); audioEl.remove(); }
-        audioEl = new Audio("data:audio/mp3;base64," + data.audio);
+        // Reuse the pre-unlocked audio element
+        audioEl.src = "data:audio/mp3;base64," + data.audio;
         audioEl.volume = 1.0;
-        audioEl.play().catch(e => console.warn("Audio play blocked:", e));
+        audioEl.play().catch(e => console.warn("Audio play error:", e));
       }
     } catch (err) {
-      console.warn("TTS error, falling back:", err);
-      // Fallback
-      if (window.speechSynthesis) {
-        const u = new SpeechSynthesisUtterance(text);
-        u.lang = lang || "en-GB";
-        speechSynthesis.speak(u);
-      }
+      console.warn("TTS error:", err);
     }
   }
 
@@ -579,3 +587,4 @@
   async function blobToBase64(blob) { return new Promise(r => { const fr = new FileReader(); fr.onloadend = () => r(fr.result.split(",")[1]); fr.readAsDataURL(blob); }); }
 
 })();
+
