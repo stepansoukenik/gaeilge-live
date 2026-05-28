@@ -41,8 +41,11 @@ export default async function handler(req, res) {
       "audio/ogg": "ogg",
       "audio/mp4": "mp4",
       "audio/mpeg": "mp3",
+      "audio/wav": "wav",
+      "audio/wave": "wav",
+      "audio/x-wav": "wav",
     };
-    const ext = extMap[mimeType] || "webm";
+    const ext = extMap[mimeType] || "wav";
 
     // Build multipart form data manually
     const boundary = "----ElevenLabsBoundary" + Date.now();
