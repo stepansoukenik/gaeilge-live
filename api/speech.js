@@ -26,7 +26,13 @@ export default async function handler(req, res) {
 
   const apiKey = process.env.ELEVENLABS_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: "ELEVENLABS_API_KEY not configured" });
+    const envKeys = Object.keys(process.env).filter(k => k.includes("ELEVEN") || k.includes("API"));
+    return res.status(500).json({ 
+      error: "ELEVENLABS_API_KEY not configured",
+      debug_env_keys: envKeys,
+      has_key: !!process.env.ELEVENLABS_API_KEY,
+      key_type: typeof process.env.ELEVENLABS_API_KEY
+    });
   }
 
   try {
